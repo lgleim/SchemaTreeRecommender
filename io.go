@@ -8,10 +8,13 @@ package main
 
 import (
 	"compress/bzip2"
+	"fmt"
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 
+	gzip "github.com/klauspost/pgzip"
 	"github.com/knakk/rdf"
 )
 
@@ -20,6 +23,17 @@ import (
 type subjectSummary struct {
 	types      []*string
 	properties []*string
+}
+
+func (subj *subjectSummary) String() string {
+	mapper := func(strings []*string) string {
+		res := "[ "
+		for _, s := range strings {
+			res += *s + " "
+		}
+		return res + "]"
+	}
+	return fmt.Sprintf("{\n  types:      %v\n  properties: %v\n}", mapper(subj.types), mapper(subj.properties))
 }
 
 // Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
@@ -32,8 +46,18 @@ func subjectSummaryReader(fileName string) chan *subjectSummary {
 		}
 		defer file.Close()
 
-		bzipReader := bzip2.NewReader(file)                             // Decompression
-		tripleDecoder := rdf.NewTripleDecoder(bzipReader, rdf.NTriples) // RDF parsing
+		var reader io.Reader = file
+		switch ext := filepath.Ext(fileName); ext {
+		case ".bz2":
+			reader = bzip2.NewReader(reader) // Decompression
+		case ".gz":
+			reader, err = gzip.NewReader(reader)
+			if err != nil {
+				log.Fatal(err)
+			}
+		}
+
+		tripleDecoder := rdf.NewTripleDecoder(reader, rdf.NTriples) // RDF parsing
 
 		var lastSubj string
 		var properties, rdfTypes []*string
