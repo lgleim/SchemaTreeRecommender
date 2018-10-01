@@ -10,28 +10,39 @@ type schemaNode struct {
 	ID         *iItem
 	parent     *schemaNode
 	children   []*schemaNode
-	nextSameID *schemaNode // node traversal pointer
-	support    uint32      // total frequency of the node in the path
-	types      []*iType    // RDFS class - nonempty only for tail nodes
+	nextSameID *schemaNode       // node traversal pointer
+	support    uint32            // total frequency of the node in the path
+	types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
 }
 
-func (node *schemaNode) toString(minSup uint32) string {
-	id := "root"
-	if node.ID != nil {
-		id = *node.ID.str + fmt.Sprintf(" (%v, %p)", node.support, node)
+func (node *schemaNode) graphViz(minSup uint32) string {
+	s := ""
+	// draw horizontal links
+	if node.nextSameID != nil && node.nextSameID.support >= minSup {
+		s += fmt.Sprintf("%v -> %v  [color=blue];\n", node, node.nextSameID)
 	}
 
-	s := ""
+	// draw types
+	for k, v := range node.types {
+		s += fmt.Sprintf("%v -> \"%v\" [color=red,label=%v];\n", node, *k.str, v)
+	}
+
+	// draw children
 	for _, child := range node.children {
 		if child.support >= minSup {
-			s += "\"" + id + "\" -> " + child.toString(minSup)
+			s += fmt.Sprintf("%v -> %v [label=%v,weight=%v]; ", node, child, child.support, child.support)
+			s += child.graphViz(minSup)
 		}
 	}
 
-	if s == "" {
-		s = "\"" + id + "\";\n"
-	}
 	return s
+}
+
+func (node *schemaNode) String() string {
+	if node.ID == nil {
+		return "root"
+	}
+	return fmt.Sprintf("\"%v (%p)\"", *node.ID.str, node)
 }
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
@@ -42,7 +53,8 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 		}
 	}
 	// child not found. create new one:
-	newChild := &schemaNode{term, node, []*schemaNode{}, nil, 0, []*iType{}}
+	newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
+	term.traversalPointer = newChild
 	node.children = append(node.children, newChild)
 	// TODO: Maintain nextSameID pointers
 	return newChild
@@ -57,7 +69,7 @@ type schemaTree struct {
 
 func (tree schemaTree) String() string {
 	s := "digraph schematree {\n"
-	s += tree.root.toString(tree.minSup)
+	s += tree.root.graphViz(tree.minSup)
 	return s + "}"
 }
 
@@ -107,15 +119,24 @@ func (tree *schemaTree) insert(s *subjectSummary, updateSupport bool) {
 
 	// insert sorted property-list into actual schemaTree
 	node := &tree.root
-	for _, prop := range properties {
-		node.support++
-		node = node.getChild(prop) // recurse, i.e., node.getChild(prop).insert(properties[1:], types)
-	}
 	node.support++
+	for _, prop := range properties {
+		node = node.getChild(prop) // recurse, i.e., node.getChild(prop).insert(properties[1:], types)
+		node.support++
+	}
 
 	// update typ "counts" at tail
-	node.types = append(node.types, types...) // TODO: make this a counting structure (map)
+	//node.types = append(node.types, types...) // TODO: make this a counting structure (map)
+	if len(types) > 0 {
+		if node.types == nil {
+			node.types = make(map[*iType]uint32)
+		}
+		for _, t := range types {
+			node.types[t]++
+		}
+	}
 }
+
 func (tree *schemaTree) reorganize() {
 	tree.updateSortOrder()
 

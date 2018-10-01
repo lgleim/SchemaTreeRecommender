@@ -27,9 +27,10 @@ func (m *typeMap) get(iri *string) *iType {
 // - its support, i.e. its total number of occurrences (totalCount)
 // - an integer indicating sort order
 type iItem struct {
-	str        *string
-	totalCount uint32
-	sortOrder  uint16
+	str              *string
+	totalCount       uint32
+	sortOrder        uint16
+	traversalPointer *schemaNode // node traversal pointer
 }
 
 func (m iItem) String() string {
@@ -41,7 +42,7 @@ type propMap map[string]*iItem
 func (m *propMap) get(iri *string) *iItem { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
 	item, ok := (*m)[*iri]
 	if !ok {
-		item = &iItem{iri, 0, uint16(len(*m))}
+		item = &iItem{iri, 0, uint16(len(*m)), nil}
 		(*m)[*iri] = item
 	}
 	return item
