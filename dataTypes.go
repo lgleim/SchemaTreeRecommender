@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // A struct capturing
 // - a string IRI (str) and
@@ -50,6 +53,12 @@ func (m *propMap) get(iri *string) *iItem { // TODO: Implement sameas Mapping/Re
 
 // An array of pointers to IRI structs
 type iList []*iItem
+
+// sort the list according to the current iList sort order
+func (l *iList) sort() {
+	// sort the properties according to the current iList sort order
+	sort.Slice(*l, func(i, j int) bool { return (*l)[i].sortOrder < (*l)[j].sortOrder })
+}
 
 func (p iList) String() string {
 	//// list representation (includes duplicates)
