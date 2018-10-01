@@ -1,0 +1,6 @@
+*.bz2
+*.gz
+*.nt
+.vscode/
+*.png
+*.dot
