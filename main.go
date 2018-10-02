@@ -8,6 +8,7 @@ import (
 func twoPass(fileName string, firstN uint64) {
 	// first pass: collect I-List and statistics
 	t1 := time.Now()
+	PrintMemUsage()
 	c := subjectSummaryReader(fileName)
 	propMap := make(propMap)
 	var i uint64
@@ -25,6 +26,7 @@ func twoPass(fileName string, firstN uint64) {
 	}
 
 	fmt.Println("First Pass:", time.Since(t1))
+	PrintMemUsage()
 
 	// second pass
 	t1 = time.Now()
@@ -49,6 +51,7 @@ func twoPass(fileName string, firstN uint64) {
 	}
 
 	fmt.Println("Second Pass:", time.Since(t1))
+	PrintMemUsage()
 
 	// r := &renderer.PNGRenderer{
 	// 	OutputFile: "my_graph.png",
@@ -61,7 +64,7 @@ func twoPass(fileName string, firstN uint64) {
 	fmt.Println(schema.support(list), schema.root.support)
 
 	t1 = time.Now()
-	rec := schema.recommend(list)
+	rec := schema.recommendProperty(list)
 	fmt.Println(time.Since(t1))
 	fmt.Println(rec[:10])
 }
