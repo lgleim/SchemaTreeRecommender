@@ -3,31 +3,31 @@ package main
 import (
 	"fmt"
 	"time"
-
-	"github.com/windler/dotgraph/renderer"
 )
 
-func twoPass(fileName string) {
+func twoPass(fileName string, firstN uint64) {
 	// first pass: collect I-List and statistics
+	t1 := time.Now()
 	c := subjectSummaryReader(fileName)
 	propMap := make(propMap)
-	i := 0
+	var i uint64
+
 	for subjectSummary := range c {
 		for _, propIri := range subjectSummary.properties {
 			prop := propMap.get(propIri)
 			prop.totalCount++
 		}
 
-		if i++; i >= 50 {
+		if i++; firstN > 0 && i >= firstN {
+			fmt.Println(subjectSummary)
 			break
 		}
 	}
 
-	// for _, v := range propMap {
-	// 	fmt.Println(*v)
-	// }
+	fmt.Println("First Pass:", time.Since(t1))
 
 	// second pass
+	t1 = time.Now()
 	c = subjectSummaryReader(fileName)
 	schema := schemaTree{
 		propMap: propMap,
@@ -42,20 +42,34 @@ func twoPass(fileName string) {
 	for subjectSummary := range c {
 		schema.insert(subjectSummary, false)
 
-		if i++; i >= 50 {
-			r := &renderer.PNGRenderer{
-				OutputFile: "my_graph.png",
-			}
-			r.Render(fmt.Sprint(schema))
-
+		if i++; firstN > 0 && i >= firstN {
+			fmt.Println(subjectSummary)
 			break
 		}
 	}
+
+	fmt.Println("Second Pass:", time.Since(t1))
+
+	// r := &renderer.PNGRenderer{
+	// 	OutputFile: "my_graph.png",
+	// }
+	// r.Render(fmt.Sprint(schema))
+
+	rdftype := propMap["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"]
+	memberOf := propMap["http://www.wikidata.org/prop/direct/P463"]
+	list := []*iItem{rdftype, memberOf}
+	fmt.Println(schema.support(list), schema.root.support)
+
+	t1 = time.Now()
+	rec := schema.recommend(list)
+	fmt.Println(time.Since(t1))
+	fmt.Println(rec[:10])
 }
 
 func main() {
-	fileName := "latest-truthy.nt.bz2"
+	// fileName := "latest-truthy.nt.bz2"
+	fileName := "100k.nt"
 	t1 := time.Now()
-	twoPass(fileName)
+	twoPass(fileName, 388)
 	fmt.Println(time.Since(t1))
 }

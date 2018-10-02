@@ -75,3 +75,19 @@ func (p iList) String() string {
 	// }
 	// return fmt.Sprint(ctr)
 }
+
+// struct to rank suggestions
+type rankedCandidate struct {
+	property    *iItem
+	probability float64
+}
+
+type propertyRecommendations []rankedCandidate
+
+func (ps propertyRecommendations) String() string {
+	s := ""
+	for _, p := range ps {
+		s += fmt.Sprintf("%v: %v\n", *p.property.str, p.probability)
+	}
+	return s
+}
