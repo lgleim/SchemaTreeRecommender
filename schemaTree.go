@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"unsafe"
 )
 
 // Nodes of the Schema FP-Tree
@@ -23,6 +24,7 @@ func newSchemaNode() schemaNode {
 }
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
+	//// hash map based
 	// child, ok := node.children[term]
 	// if !ok {
 	// 	// child not found. create new one:
@@ -32,16 +34,22 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	// }
 	// return child
 
-	// theoretically runtime complexity could be improved by using binary search on sorted child array. Limited by Go's lack of pointer arithmetic. Sort on e.g. child id lookups likely slower then trivial linear search (via pointer equivalence)
-	for _, child := range node.children {
-		if child.ID == term {
-			return child
-		}
+	// binary search for the child
+	i := sort.Search(len(node.children), func(i int) bool { return uintptr(unsafe.Pointer(node.children[i])) >= uintptr(unsafe.Pointer(term)) })
+	if i < len(node.children) && node.children[i].ID == term {
+		return node.children[i]
 	}
-	// child not found. create new one:
+
+	// child not found, but i is the index where it would be inserted.
+	// create a new one...
 	newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
 	term.traversalPointer = newChild
-	node.children = append(node.children, newChild)
+
+	// ...and insert it at position i
+	node.children = append(node.children, nil)
+	copy(node.children[i+1:], node.children[i:])
+	node.children[i] = newChild
+
 	return newChild
 }
 

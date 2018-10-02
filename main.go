@@ -20,7 +20,6 @@ func twoPass(fileName string, firstN uint64) {
 		}
 
 		if i++; firstN > 0 && i >= firstN {
-			fmt.Println(subjectSummary)
 			break
 		}
 	}
@@ -45,7 +44,6 @@ func twoPass(fileName string, firstN uint64) {
 		schema.insert(subjectSummary, false)
 
 		if i++; firstN > 0 && i >= firstN {
-			fmt.Println(subjectSummary)
 			break
 		}
 	}
