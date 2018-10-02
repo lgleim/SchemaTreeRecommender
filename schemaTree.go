@@ -6,13 +6,43 @@ import (
 )
 
 // Nodes of the Schema FP-Tree
+// TODO: determine wether to use hash-maps or arrays to store child notes in the tree
 type schemaNode struct {
-	ID         *iItem
-	parent     *schemaNode
-	children                     //[]*schemaNode
+	ID     *iItem
+	parent *schemaNode
+	// children   map[*iItem]*schemaNode
+	children   []*schemaNode
 	nextSameID *schemaNode       // node traversal pointer
 	support    uint32            // total frequency of the node in the path
 	types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
+}
+
+func newSchemaNode() schemaNode {
+	// return schemaNode{nil, nil, make(map[*iItem]*schemaNode), nil, 0, nil}
+	return schemaNode{nil, nil, []*schemaNode{}, nil, 0, nil}
+}
+
+func (node *schemaNode) getChild(term *iItem) *schemaNode {
+	// child, ok := node.children[term]
+	// if !ok {
+	// 	// child not found. create new one:
+	// 	child = &schemaNode{term, node, make(map[*iItem]*schemaNode), term.traversalPointer, 0, nil}
+	// 	term.traversalPointer = child
+	// 	node.children[term] = child
+	// }
+	// return child
+
+	// theoretically runtime complexity could be improved by using binary search on sorted child array. Limited by Go's lack of pointer arithmetic. Sort on e.g. child id lookups likely slower then trivial linear search (via pointer equivalence)
+	for _, child := range node.children {
+		if child.ID == term {
+			return child
+		}
+	}
+	// child not found. create new one:
+	newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
+	term.traversalPointer = newChild
+	node.children = append(node.children, newChild)
+	return newChild
 }
 
 func (node *schemaNode) graphViz(minSup uint32) string {
@@ -43,20 +73,6 @@ func (node *schemaNode) String() string {
 		return "root"
 	}
 	return fmt.Sprintf("\"%v (%p)\"", *node.ID.str, node)
-}
-
-func (node *schemaNode) getChild(term *iItem) *schemaNode {
-	// theoretically runtime complexity could be improved by using binary search on sorted child array. Limited by Go's lack of pointer arithmetic. Sort on e.g. child id lookups likely slower then trivial linear search (via pointer equivalence)
-	for _, child := range node.children {
-		if child.ID == term {
-			return child
-		}
-	}
-	// child not found. create new one:
-	newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
-	term.traversalPointer = newChild
-	node.children = append(node.children, newChild)
-	return newChild
 }
 
 type schemaTree struct {

@@ -34,7 +34,7 @@ func twoPass(fileName string, firstN uint64) {
 	schema := schemaTree{
 		propMap: propMap,
 		typeMap: make(typeMap),
-		root:    schemaNode{nil, nil, []*schemaNode{}, nil, 0, nil},
+		root:    newSchemaNode(),
 		minSup:  3,
 	}
 
