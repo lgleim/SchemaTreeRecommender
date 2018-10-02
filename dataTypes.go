@@ -60,11 +60,19 @@ func (l *iList) sort() {
 	sort.Slice(*l, func(i, j int) bool { return (*l)[i].sortOrder < (*l)[j].sortOrder })
 }
 
-func (p iList) String() string {
+func (l *iList) toSet() map[*iItem]bool {
+	pSet := make(map[*iItem]bool, len(*l))
+	for _, p := range *l {
+		pSet[p] = true
+	}
+	return pSet
+}
+
+func (l iList) String() string {
 	//// list representation (includes duplicates)
 	o := "[ "
-	for i := 0; i < len(p); i++ {
-		o += *(p[i].str) + " "
+	for i := 0; i < len(l); i++ {
+		o += *(l[i].str) + " "
 	}
 	return o + "]"
 
@@ -77,17 +85,31 @@ func (p iList) String() string {
 }
 
 // struct to rank suggestions
-type rankedCandidate struct {
+type rankedPropertyCandidate struct {
 	property    *iItem
 	probability float64
 }
 
-type propertyRecommendations []rankedCandidate
+type propertyRecommendations []rankedPropertyCandidate
 
 func (ps propertyRecommendations) String() string {
 	s := ""
 	for _, p := range ps {
 		s += fmt.Sprintf("%v: %v\n", *p.property.str, p.probability)
+	}
+	return s
+}
+
+type rankedTypeCandidate struct {
+	class       *iType
+	probability float64
+}
+type typeRecommendations []rankedTypeCandidate
+
+func (ts typeRecommendations) String() string {
+	s := ""
+	for _, t := range ts {
+		s += fmt.Sprintf("%v: %v\n", *t.class.str, t.probability)
 	}
 	return s
 }

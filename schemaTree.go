@@ -9,7 +9,7 @@ import (
 type schemaNode struct {
 	ID         *iItem
 	parent     *schemaNode
-	children   []*schemaNode
+	children                     //[]*schemaNode
 	nextSameID *schemaNode       // node traversal pointer
 	support    uint32            // total frequency of the node in the path
 	types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
@@ -210,16 +210,13 @@ func (node *schemaNode) prefixContains(propertyPath *iList) bool {
 	return false
 }
 
-func (tree *schemaTree) recommend(properties iList) propertyRecommendations {
+func (tree *schemaTree) recommendProperty(properties iList) propertyRecommendations {
 	var setSupport uint32
 	//tree.root.support // empty set occured in all transactions
 
 	properties.sort() // descending by support
 
-	pSet := make(map[*iItem]bool)
-	for _, p := range properties {
-		pSet[p] = true
-	}
+	pSet := properties.toSet()
 
 	candidates := make(map[*iItem]uint32)
 
@@ -231,7 +228,7 @@ func (tree *schemaTree) recommend(properties iList) propertyRecommendations {
 		}
 	}
 
-	// walk from each leaf towards root...
+	// walk from each leaf towards root...l
 	for leaf := properties[len(properties)-1].traversalPointer; leaf != nil; leaf = leaf.nextSameID {
 		if leaf.prefixContains(&properties) {
 			setSupport += leaf.support // number of occuences of this set of properties in the current branch
@@ -247,9 +244,9 @@ func (tree *schemaTree) recommend(properties iList) propertyRecommendations {
 	// TODO: If there are no candidates, consider doing (n-1)-gram smoothing over property subsets
 
 	// now that all candidates have been collected, rank them
-	ranked := make([]rankedCandidate, 0, len(candidates))
+	ranked := make([]rankedPropertyCandidate, 0, len(candidates))
 	for candidate, support := range candidates {
-		ranked = append(ranked, rankedCandidate{candidate, float64(support) / float64(setSupport)})
+		ranked = append(ranked, rankedPropertyCandidate{candidate, float64(support) / float64(setSupport)})
 	}
 
 	// sort descending by support
@@ -257,3 +254,48 @@ func (tree *schemaTree) recommend(properties iList) propertyRecommendations {
 
 	return ranked
 }
+
+// func (tree *schemaTree) recommendType(properties iList) typeRecommendations {
+// 	var setSupport uint32
+// 	//tree.root.support // empty set occured in all transactions
+
+// 	properties.sort() // descending by support
+
+// 	pSet := properties.toSet()
+
+// 	candidates := make(map[*iItem]uint32)
+
+// 	var makeCandidates func(startNode *schemaNode)
+// 	makeCandidates = func(startNode *schemaNode) { // head hunter function ;)
+// 		for _, child := range startNode.children {
+// 			candidates[child.ID] += child.support
+// 			makeCandidates(child)
+// 		}
+// 	}
+
+// 	// walk from each leaf towards root...l
+// 	for leaf := properties[len(properties)-1].traversalPointer; leaf != nil; leaf = leaf.nextSameID {
+// 		if leaf.prefixContains(&properties) {
+// 			setSupport += leaf.support // number of occuences of this set of properties in the current branch
+// 			for cur := leaf; cur.parent != nil; cur = cur.parent {
+// 				if !(pSet[cur.ID]) {
+// 					candidates[cur.ID] += leaf.support
+// 				}
+// 			}
+// 			makeCandidates(leaf)
+// 		}
+// 	}
+
+// 	// TODO: If there are no candidates, consider doing (n-1)-gram smoothing over property subsets
+
+// 	// now that all candidates have been collected, rank them
+// 	ranked := make([]rankedCandidate, 0, len(candidates))
+// 	for candidate, support := range candidates {
+// 		ranked = append(ranked, rankedCandidate{candidate, float64(support) / float64(setSupport)})
+// 	}
+
+// 	// sort descending by support
+// 	sort.Slice(ranked, func(i, j int) bool { return ranked[i].probability > ranked[j].probability })
+
+// 	return ranked
+// }
