@@ -17,6 +17,15 @@ type SchemaTree struct {
 	MinSup  uint32
 }
 
+func newSchemaTree() SchemaTree {
+	return SchemaTree{
+		propMap: make(propMap),
+		typeMap: make(typeMap),
+		Root:    newRootNode(),
+		MinSup:  3,
+	}
+}
+
 func (tree SchemaTree) String() string {
 	s := "digraph schematree {\n"
 	s += tree.Root.graphViz(tree.MinSup)
@@ -239,7 +248,7 @@ func (tree *SchemaTree) Save(filePath string) error {
 	t1 := time.Now()
 	fmt.Printf("Writing schema to file %v... ", filePath)
 
-	// // Via Sereal lib since it supports serialization of object references, including circular references.
+	// // Sereal lib would be nicer since it supports serialization of object references, including circular references.
 	// // See https://github.com/Sereal/Sereal
 	// e := sereal.NewEncoder()
 	// // e.Compression = sereal.SnappyCompressor{Incremental: true}
@@ -265,6 +274,8 @@ func (tree *SchemaTree) Save(filePath string) error {
 
 // LoadSchemaTree loads a binarized SchemaTree from disk
 func LoadSchemaTree(filePath string) (*SchemaTree, error) {
+	// Alternatively via GobDecoder(...): https://stackoverflow.com/a/12854659
+
 	fmt.Printf("Loading schema (from file %v): ", filePath)
 	t1 := time.Now()
 
