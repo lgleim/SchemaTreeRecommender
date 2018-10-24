@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"time"
+	"flag"
 )
 
 func twoPass(fileName string, firstN uint64) *SchemaTree {
@@ -56,7 +57,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 
 func main() {
 	// fileName := "latest-truthy.nt.bz2"
-	fileName := "100k.nt"
+	fileName := flag.String("file","100k.nt", "the file to parse")
 	t1 := time.Now()
 	schema := twoPass(fileName, 388)
 
