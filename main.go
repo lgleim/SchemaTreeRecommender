@@ -33,7 +33,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	schema := SchemaTree{
 		propMap: propMap,
 		typeMap: make(typeMap),
-		Root:    newSchemaNode(),
+		Root:    newRootNode(),
 		MinSup:  3,
 	}
 
@@ -41,7 +41,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 
 	i = 0
 	for subjectSummary := range c {
-		schema.insert(subjectSummary, false)
+		schema.Insert(subjectSummary, false)
 
 		if i++; firstN > 0 && i >= firstN {
 			break
@@ -68,7 +68,7 @@ func main() {
 	rdftype := schema.propMap["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"]
 	memberOf := schema.propMap["http://www.wikidata.org/prop/direct/P463"]
 	list := []*iItem{rdftype, memberOf}
-	fmt.Println(schema.support(list), schema.Root.Support)
+	fmt.Println(schema.Support(list), schema.Root.Support)
 
 	t1 = time.Now()
 	rec := schema.recommendProperty(list)
@@ -77,8 +77,8 @@ func main() {
 	PrintMemUsage()
 	fmt.Println(rec[:10])
 
-	schema.save("schemaTree.bin")
-	schema, _ = loadSchemaTree("schemaTree.bin")
+	schema.Save("schemaTree.bin")
+	schema, _ = LoadSchemaTree("schemaTree.bin")
 	rec = schema.recommendProperty(list)
 
 	PrintMemUsage()
