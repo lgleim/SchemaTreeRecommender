@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-func twoPass(fileName string, firstN uint64) {
+func twoPass(fileName string, firstN uint64) *SchemaTree {
 	// first pass: collect I-List and statistics
 	t1 := time.Now()
 	PrintMemUsage()
@@ -16,7 +16,7 @@ func twoPass(fileName string, firstN uint64) {
 	for subjectSummary := range c {
 		for _, propIri := range subjectSummary.properties {
 			prop := propMap.get(propIri)
-			prop.totalCount++
+			prop.TotalCount++
 		}
 
 		if i++; firstN > 0 && i >= firstN {
@@ -30,11 +30,11 @@ func twoPass(fileName string, firstN uint64) {
 	// second pass
 	t1 = time.Now()
 	c = subjectSummaryReader(fileName)
-	schema := schemaTree{
+	schema := SchemaTree{
 		propMap: propMap,
 		typeMap: make(typeMap),
-		root:    newSchemaNode(),
-		minSup:  3,
+		Root:    newSchemaNode(),
+		MinSup:  3,
 	}
 
 	schema.updateSortOrder()
@@ -51,26 +51,37 @@ func twoPass(fileName string, firstN uint64) {
 	fmt.Println("Second Pass:", time.Since(t1))
 	PrintMemUsage()
 
-	// r := &renderer.PNGRenderer{
-	// 	OutputFile: "my_graph.png",
-	// }
-	// r.Render(fmt.Sprint(schema))
-
-	rdftype := propMap["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"]
-	memberOf := propMap["http://www.wikidata.org/prop/direct/P463"]
-	list := []*iItem{rdftype, memberOf}
-	fmt.Println(schema.support(list), schema.root.support)
-
-	t1 = time.Now()
-	rec := schema.recommendProperty(list)
-	fmt.Println(time.Since(t1))
-	fmt.Println(rec[:10])
+	return &schema
 }
 
 func main() {
 	// fileName := "latest-truthy.nt.bz2"
 	fileName := "100k.nt"
 	t1 := time.Now()
-	twoPass(fileName, 388)
+	schema := twoPass(fileName, 388)
+
+	// r := &renderer.PNGRenderer{
+	// 	OutputFile: "my_graph.png",
+	// }
+	// r.Render(fmt.Sprint(schema))
+
+	rdftype := schema.propMap["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"]
+	memberOf := schema.propMap["http://www.wikidata.org/prop/direct/P463"]
+	list := []*iItem{rdftype, memberOf}
+	fmt.Println(schema.support(list), schema.Root.Support)
+
+	t1 = time.Now()
+	rec := schema.recommendProperty(list)
 	fmt.Println(time.Since(t1))
+
+	PrintMemUsage()
+	fmt.Println(rec[:10])
+
+	schema.save("schemaTree.bin")
+	schema, _ = loadSchemaTree("schemaTree.bin")
+	rec = schema.recommendProperty(list)
+
+	PrintMemUsage()
+	fmt.Println(rec[:10])
+
 }

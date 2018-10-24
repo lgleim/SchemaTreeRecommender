@@ -5,13 +5,12 @@ import (
 	"sort"
 )
 
-// A struct capturing
+// Class statistics
 // - a string IRI (str) and
 // - its support, i.e. its total number of occurrences (totalCount)
-// - an integer indicating sort order
 type iType struct {
-	str        *string
-	totalCount uint32
+	Str        *string
+	TotalCount uint32
 }
 
 type typeMap map[string]*iType
@@ -30,14 +29,14 @@ func (m *typeMap) get(iri *string) *iType {
 // - its support, i.e. its total number of occurrences (totalCount)
 // - an integer indicating sort order
 type iItem struct {
-	str              *string
-	totalCount       uint32
-	sortOrder        uint16
+	Str              *string
+	TotalCount       uint32
+	SortOrder        uint16
 	traversalPointer *schemaNode // node traversal pointer
 }
 
 func (m iItem) String() string {
-	return fmt.Sprint(m.totalCount, "x\t", *m.str, " (", m.sortOrder, ")")
+	return fmt.Sprint(m.TotalCount, "x\t", *m.Str, " (", m.SortOrder, ")")
 }
 
 type propMap map[string]*iItem
@@ -57,7 +56,7 @@ type iList []*iItem
 // sort the list according to the current iList sort order
 func (l *iList) sort() {
 	// sort the properties according to the current iList sort order
-	sort.Slice(*l, func(i, j int) bool { return (*l)[i].sortOrder < (*l)[j].sortOrder })
+	sort.Slice(*l, func(i, j int) bool { return (*l)[i].SortOrder < (*l)[j].SortOrder })
 }
 
 func (l *iList) toSet() map[*iItem]bool {
@@ -72,7 +71,7 @@ func (l iList) String() string {
 	//// list representation (includes duplicates)
 	o := "[ "
 	for i := 0; i < len(l); i++ {
-		o += *(l[i].str) + " "
+		o += *(l[i].Str) + " "
 	}
 	return o + "]"
 
@@ -86,8 +85,8 @@ func (l iList) String() string {
 
 // struct to rank suggestions
 type rankedPropertyCandidate struct {
-	property    *iItem
-	probability float64
+	Property    *iItem
+	Probability float64
 }
 
 type propertyRecommendations []rankedPropertyCandidate
@@ -95,21 +94,21 @@ type propertyRecommendations []rankedPropertyCandidate
 func (ps propertyRecommendations) String() string {
 	s := ""
 	for _, p := range ps {
-		s += fmt.Sprintf("%v: %v\n", *p.property.str, p.probability)
+		s += fmt.Sprintf("%v: %v\n", *p.Property.Str, p.Probability)
 	}
 	return s
 }
 
 type rankedTypeCandidate struct {
-	class       *iType
-	probability float64
+	Class       *iType
+	Probability float64
 }
 type typeRecommendations []rankedTypeCandidate
 
 func (ts typeRecommendations) String() string {
 	s := ""
 	for _, t := range ts {
-		s += fmt.Sprintf("%v: %v\n", *t.class.str, t.probability)
+		s += fmt.Sprintf("%v: %v\n", *t.Class.Str, t.Probability)
 	}
 	return s
 }
