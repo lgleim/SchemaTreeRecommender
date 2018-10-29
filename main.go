@@ -1,9 +1,9 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"time"
-	"flag"
 )
 
 func twoPass(fileName string, firstN uint64) *SchemaTree {
@@ -57,9 +57,14 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 
 func main() {
 	// fileName := "latest-truthy.nt.bz2"
-	fileName := flag.String("file","100k.nt", "the file to parse")
+	fileName := flag.String("file", "100k.nt", "the file to parse")
+	firstNsubjects := uint64(*flag.Int64("n", 0, "Only parse the first n subjects")) // TODO: handle negative inputs
+
+	// parse commandline arguments/flags
+	flag.Parse()
+
 	t1 := time.Now()
-	schema := twoPass(fileName, 388)
+	schema := twoPass(*fileName, firstNsubjects)
 
 	// r := &renderer.PNGRenderer{
 	// 	OutputFile: "my_graph.png",
