@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"sync/atomic"
 	"unsafe"
 )
 
@@ -24,6 +25,24 @@ func newRootNode() schemaNode {
 	return schemaNode{&iItem{&root, 0, 0, nil}, nil, []*schemaNode{}, nil, 0, nil}
 }
 
+func (node *schemaNode) incrementSupport() {
+	atomic.AddUint32(&node.Support, 1)
+}
+
+// TODO make thread safe
+func (node *schemaNode) insertTypes(types []*iType) {
+	// update typ "counts" at tail
+	if len(types) > 0 {
+		if node.Types == nil {
+			node.Types = make(map[*iType]uint32)
+		}
+		for _, t := range types {
+			node.Types[t]++
+		}
+	}
+}
+
+// TODO make thread safe
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	//// hash map based
 	// child, ok := node.children[term]

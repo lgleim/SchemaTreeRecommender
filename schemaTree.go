@@ -33,67 +33,30 @@ func (tree SchemaTree) String() string {
 }
 
 func (tree *SchemaTree) Insert(s *subjectSummary, updateSupport bool) {
-	// map list of types to corresponding set of iType items
-	types := make([]*iType, 0, len(s.types))
-	for _, typeIri := range s.types {
-		item := tree.typeMap.get(typeIri)
+	properties := s.properties
 
-		alreadyInserted := false
-		for _, e := range types { // TODO: Ineffizient/ Unnötig?
-			if e == item {
-				alreadyInserted = true
-				break
-			}
-		}
-		if !alreadyInserted {
-			types = append(types, item)
-			if updateSupport {
-				item.TotalCount++
-			}
+	// sort the properties according to the current iList sort order & deduplicate
+	properties.sortAndDeduplicate()
+
+	if updateSupport {
+		// for _, item := range s.types {
+		// 	item.increment()
+		// }
+		for _, item := range properties {
+			item.increment()
 		}
 	}
-
-	// map properties to corresponding iList items
-	properties := make(iList, 0, len(s.properties))
-	for _, propIri := range s.properties {
-		item := tree.propMap.get(propIri)
-
-		alreadyInserted := false
-		for _, e := range properties { // TODO: Ineffizient
-			if e == item {
-				alreadyInserted = true
-				break
-			}
-		}
-		if !alreadyInserted {
-			properties = append(properties, item)
-			if updateSupport {
-				item.TotalCount++
-			}
-		}
-	}
-
-	// sort the properties according to the current iList sort order
-	properties.sort()
 
 	// insert sorted property-list into actual schemaTree
 	node := &tree.Root
-	node.Support++
+	node.incrementSupport()
 	for _, prop := range properties {
 		node = node.getChild(prop) // recurse, i.e., node.getChild(prop).insert(properties[1:], types)
-		node.Support++
+		node.incrementSupport()
 	}
 
-	// update typ "counts" at tail
-	//node.types = append(node.types, types...) // TODO: make this a counting structure (map)
-	if len(types) > 0 {
-		if node.Types == nil {
-			node.Types = make(map[*iType]uint32)
-		}
-		for _, t := range types {
-			node.Types[t]++
-		}
-	}
+	// update class "counts" at tail
+	node.insertTypes(s.types)
 }
 
 func (tree *SchemaTree) reorganize() {

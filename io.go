@@ -7,39 +7,42 @@ I/O and RDF Parsing
 package main
 
 import (
+	"bufio"
 	"compress/bzip2"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"unicode/utf8"
 
 	gzip "github.com/klauspost/pgzip"
-	"github.com/knakk/rdf"
 )
 
 // All type annotations (types) and properties (properties) for a fixed subject
 // equivalent of a transaction in frequent pattern mining
 type subjectSummary struct {
-	types      []*string
-	properties []*string
+	types      []*iType
+	properties iList
 }
 
 func (subj *subjectSummary) String() string {
-	mapper := func(strings []*string) string {
-		res := "[ "
-		for _, s := range strings {
-			res += *s + " "
-		}
-		return res + "]"
+	var types, properties string
+	for _, item := range subj.types {
+		types += *item.Str + " "
 	}
-	return fmt.Sprintf("{\n  types:      %v\n  properties: %v\n}", mapper(subj.types), mapper(subj.properties))
+	for _, item := range subj.properties {
+		properties += *item.Str + " "
+	}
+	return fmt.Sprintf("{\n  types:      [ %v ]\n  properties: [ %v ]\n}", types, properties)
 }
 
 // Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
-func subjectSummaryReader(fileName string) chan *subjectSummary {
+func subjectSummaryReader(fileName string, propMap *propMap, typeMap *typeMap) chan *subjectSummary {
 	c := make(chan *subjectSummary)
 	go func() {
+		defer close(c)
+
 		file, err := os.Open(fileName)
 		if err != nil {
 			log.Fatal(err)
@@ -56,43 +59,113 @@ func subjectSummaryReader(fileName string) chan *subjectSummary {
 				log.Fatal(err)
 			}
 		}
+		scanner := bufio.NewScanner(reader)
 
-		tripleDecoder := rdf.NewTripleDecoder(reader, rdf.NTriples) // RDF parsing
-
+		var line, token []byte
 		var lastSubj string
-		var properties, rdfTypes []*string
+		var bytesProcessed int
+		pMap, tMap := *propMap, *typeMap
+		rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+		summary := &subjectSummary{[]*iType{}, []*iItem{}}
 
-		for triple, err := tripleDecoder.Decode(); err != io.EOF; triple, err = tripleDecoder.Decode() {
-			if err != nil {
-				log.Fatal(err)
-			}
+		for scanner.Scan() {
+			line = scanner.Bytes()
 
-			// Skip blank nodes / literals in predicate position
-			if triple.Pred.Type() != rdf.TermIRI {
+			// process subject
+			bytesProcessed, token = firstWord(line)
+
+			if r, _ := utf8.DecodeRune(token); r == '#' { // line is a comment
 				continue
 			}
 
-			currSubj := triple.Subj.String()
-			if currSubj != lastSubj { // If this a new subject, emit the previous predicate set and start clean
-				if properties != nil {
-					c <- &subjectSummary{rdfTypes, properties}
+			// If this a new subject, emit the previous predicate set and start clean
+			if lastSubj != string(token) { // should only be allocated on stack - c.f. https://github.com/golang/go/issues/11777
+				if lastSubj != "" {
+					c <- summary
 				}
 
-				lastSubj = currSubj
-				properties = []*string{}
-				rdfTypes = []*string{}
+				lastSubj = string(token) // allocate string (on heap)
+				summary = &subjectSummary{[]*iType{}, []*iItem{}}
 			}
 
-			predIri := triple.Pred.String()
-			properties = append(properties, &predIri)
+			// process predicate
+			line = line[bytesProcessed:]
+			bytesProcessed, token = firstWord(line)
 
-			// also add rdf:type statements to the types list
-			if predIri == "http://www.w3.org/1999/02/22-rdf-syntax-ns#type" {
-				typeIri := triple.Obj.String()
-				rdfTypes = append(rdfTypes, &typeIri)
+			predicate := pMap.get(string(token))
+			summary.properties = append(summary.properties, predicate)
+
+			// rdf:type statements are also added to the types list
+			if predicate == rdfType {
+				// process object
+				line = line[bytesProcessed:]
+				bytesProcessed, token = firstWord(line)
+
+				summary.types = append(summary.types, tMap.get(string(token)))
 			}
 		}
-		close(c)
+
+		if scanner.Err() != nil {
+			log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
+		}
+
 	}()
 	return c
+}
+
+// Adapted from 'ScanWords' in https://golang.org/src/bufio/scan.go
+//
+// firstWord returns the first space-separated word of text, with
+// surrounding spaces & angle brackets deleted.
+func firstWord(data []byte) (advance int, token []byte) {
+	// Skip leading spaces.
+	start := 0
+	for width := 0; start < len(data); start += width {
+		var r rune
+		r, width = utf8.DecodeRune(data[start:])
+		if !isSpaceOrBracket(r) {
+			break
+		}
+	}
+	// Scan until space, marking end of word.
+	for width, i := 0, start; i < len(data); i += width {
+		var r rune
+		r, width = utf8.DecodeRune(data[i:])
+		if isSpaceOrBracket(r) {
+			return i + width, data[start:i]
+		}
+	}
+	// If we're at EOL, we have a final, non-empty, non-terminated word. Return it.
+	if len(data) > start {
+		return len(data), data[start:]
+	}
+	// Request more data.
+	return start, nil
+}
+
+// Adapted from 'isSpace' in https://golang.org/src/bufio/scan.go
+//
+// isSpace reports whether the character is a Unicode white space character .
+func isSpaceOrBracket(r rune) bool {
+	if r <= '\u00FF' {
+		// Obvious ASCII ones: \t through \r plus space. Plus two Latin-1 oddballs.
+		switch r {
+		case ' ', '\t', '\n', '\v', '\f', '\r':
+			return true
+		case '\u0085', '\u00A0':
+			return true
+		case '<', '>': // n-triples IRI brackets
+			return true
+		}
+		return false
+	}
+	// High-valued ones.
+	if '\u2000' <= r && r <= '\u200a' {
+		return true
+	}
+	switch r {
+	case '\u1680', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000':
+		return true
+	}
+	return false
 }

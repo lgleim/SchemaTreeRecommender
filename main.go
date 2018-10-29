@@ -6,51 +6,70 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+	"sync"
+	"sync/atomic"
 	"time"
 )
 
 func twoPass(fileName string, firstN uint64) *SchemaTree {
 	// first pass: collect I-List and statistics
 	t1 := time.Now()
-	PrintMemUsage()
-	c := subjectSummaryReader(fileName)
-	propMap := make(propMap)
-	var i uint64
 
-	for subjectSummary := range c {
-		for _, propIri := range subjectSummary.properties {
-			prop := propMap.get(propIri)
-			prop.TotalCount++
-		}
-
-		if i++; firstN > 0 && i >= firstN {
-			break
-		}
+	schema := SchemaTree{
+		propMap: make(propMap),
+		typeMap: make(typeMap),
+		Root:    newRootNode(),
+		MinSup:  3,
 	}
+
+	PrintMemUsage()
+	c := subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap)
+
+	concurrency := 5
+	var wg sync.WaitGroup // goroutine coordination
+	wg.Add(concurrency)
+	var subjectCount uint64
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			for subjectSummary := range c {
+				for _, prop := range subjectSummary.properties {
+					prop.increment()
+				}
+
+				if atomic.AddUint64(&subjectCount, 1); firstN > 0 && subjectCount >= firstN {
+					break
+				}
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
 
 	fmt.Println("First Pass:", time.Since(t1))
 	PrintMemUsage()
 
 	// second pass
 	t1 = time.Now()
-	c = subjectSummaryReader(fileName)
-	schema := SchemaTree{
-		propMap: propMap,
-		typeMap: make(typeMap),
-		Root:    newRootNode(),
-		MinSup:  3,
-	}
+	c = subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap)
 
 	schema.updateSortOrder()
 
-	i = 0
-	for subjectSummary := range c {
-		schema.Insert(subjectSummary, false)
+	subjectCount = 0
+	concurrency = 1
+	wg.Add(concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			for subjectSummary := range c {
+				schema.Insert(subjectSummary, false)
 
-		if i++; firstN > 0 && i >= firstN {
-			break
-		}
+				if atomic.AddUint64(&subjectCount, 1); firstN > 0 && subjectCount >= firstN {
+					break
+				}
+			}
+			wg.Done()
+		}()
 	}
+	wg.Wait()
 
 	fmt.Println("Second Pass:", time.Since(t1))
 	PrintMemUsage()
