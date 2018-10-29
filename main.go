@@ -3,6 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
+	"runtime/pprof"
 	"time"
 )
 
@@ -59,9 +62,20 @@ func main() {
 	// fileName := "latest-truthy.nt.bz2"
 	fileName := flag.String("file", "100k.nt", "the file to parse")
 	firstNsubjects := uint64(*flag.Int64("n", 0, "Only parse the first n subjects")) // TODO: handle negative inputs
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 
 	// parse commandline arguments/flags
 	flag.Parse()
+
+	// write cpu profile to file
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	t1 := time.Now()
 	schema := twoPass(*fileName, firstNsubjects)
