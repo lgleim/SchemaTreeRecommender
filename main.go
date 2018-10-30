@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime"
 	"runtime/pprof"
 	"sync"
 	"sync/atomic"
@@ -25,7 +26,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	PrintMemUsage()
 	c := subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap)
 
-	concurrency := 12
+	concurrency := 25
 	var wg sync.WaitGroup // goroutine coordination
 	wg.Add(concurrency)
 	var subjectCount uint64
@@ -55,7 +56,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	schema.updateSortOrder()
 
 	subjectCount = 0
-	concurrency = 12
+	// concurrency = 12
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -78,9 +79,10 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 }
 
 func main() {
-	fileName := flag.String("file", "100k.nt", "the file to parse")
+	fileName := flag.String("file", "10M.nt", "the file to parse")
 	firstNsubjects := uint64(*flag.Int64("n", 0, "Only parse the first n subjects")) // TODO: handle negative inputs
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -89,9 +91,11 @@ func main() {
 	if *cpuprofile != "" {
 		f, err := os.Create(*cpuprofile)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatal("could not create CPU profile: ", err)
 		}
-		pprof.StartCPUProfile(f)
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
 		defer pprof.StopCPUProfile()
 	}
 
@@ -103,8 +107,8 @@ func main() {
 	// }
 	// r.Render(fmt.Sprint(schema))
 
-	rdftype := schema.propMap["http://www.w3.org/1999/02/22-rdf-syntax-ns#type"]
-	memberOf := schema.propMap["http://www.wikidata.org/prop/direct/P463"]
+	rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+	memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
 	list := []*iItem{rdftype, memberOf}
 	fmt.Println(schema.Support(list), schema.Root.Support)
 
@@ -122,4 +126,15 @@ func main() {
 	PrintMemUsage()
 	fmt.Println(rec[:10])
 
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal("could not create memory profile: ", err)
+		}
+		runtime.GC() // get up-to-date statistics
+		if err := pprof.WriteHeapProfile(f); err != nil {
+			log.Fatal("could not write memory profile: ", err)
+		}
+		f.Close()
+	}
 }
