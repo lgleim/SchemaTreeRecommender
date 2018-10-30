@@ -25,7 +25,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	PrintMemUsage()
 	c := subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap)
 
-	concurrency := 5
+	concurrency := 12
 	var wg sync.WaitGroup // goroutine coordination
 	wg.Add(concurrency)
 	var subjectCount uint64
@@ -55,7 +55,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	schema.updateSortOrder()
 
 	subjectCount = 0
-	concurrency = 1
+	concurrency = 12
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
 		go func() {
@@ -78,7 +78,6 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 }
 
 func main() {
-	// fileName := "latest-truthy.nt.bz2"
 	fileName := flag.String("file", "100k.nt", "the file to parse")
 	firstNsubjects := uint64(*flag.Int64("n", 0, "Only parse the first n subjects")) // TODO: handle negative inputs
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")

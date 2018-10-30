@@ -74,7 +74,8 @@ func subjectSummaryReader(fileName string, propMap *propMap, typeMap *typeMap) c
 			// process subject
 			bytesProcessed, token = firstWord(line)
 
-			if r, _ := utf8.DecodeRune(token); r == '#' { // line is a comment
+			// if r, _ := utf8.DecodeRune(token); r == '#' { // line is a comment
+			if token[0] == '#' { // line is a comment
 				continue
 			}
 
@@ -121,18 +122,38 @@ func firstWord(data []byte) (advance int, token []byte) {
 	// Skip leading spaces.
 	start := 0
 	for width := 0; start < len(data); start += width {
-		var r rune
-		r, width = utf8.DecodeRune(data[start:])
-		if !isSpaceOrBracket(r) {
-			break
+		// var isSpace bool
+		// if isSpace, width = nextRuneIsSpaceOrBracket(data[start:]); !isSpace {
+		// 	break
+		// }
+
+		if data[start] < utf8.RuneSelf {
+			if !isSpaceOrBracket(rune(data[start])) {
+				break
+			}
+			width = 1
+		} else {
+			var r rune
+			r, width = utf8.DecodeRune(data[start:])
+			if !isSpaceOrBracket(r) {
+				break
+			}
 		}
 	}
 	// Scan until space, marking end of word.
 	for width, i := 0, start; i < len(data); i += width {
-		var r rune
-		r, width = utf8.DecodeRune(data[i:])
-		if isSpaceOrBracket(r) {
-			return i + width, data[start:i]
+		// Fast path 1: ASCII.
+		if data[i] < utf8.RuneSelf {
+			if isSpaceOrBracket(rune(data[i])) {
+				return i + 1, data[start:i]
+			}
+			width = 1
+		} else {
+			var r rune
+			r, width = utf8.DecodeRune(data[i:])
+			if isSpaceOrBracket(r) {
+				return i + width, data[start:i]
+			}
 		}
 	}
 	// If we're at EOL, we have a final, non-empty, non-terminated word. Return it.

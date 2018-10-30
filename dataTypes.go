@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"sync/atomic"
 )
 
@@ -50,9 +51,23 @@ func (p iItem) String() string {
 
 type propMap map[string]*iItem
 
+var propMapLock sync.RWMutex
+
+// thread-safe
 func (m *propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
+	propMapLock.RLock()
 	item, ok := (*m)[iri]
+	propMapLock.RUnlock()
+
 	if !ok {
+		propMapLock.Lock()
+		defer propMapLock.Unlock()
+
+		// recheck existence - might have been created by other thread
+		if item, ok = (*m)[iri]; ok {
+			return
+		}
+
 		item = &iItem{&iri, 0, uint16(len(*m)), nil}
 		(*m)[iri] = item
 	}

@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 	"unsafe"
+
+	gzip "github.com/klauspost/pgzip"
 )
 
 type SchemaTree struct {
@@ -32,6 +34,7 @@ func (tree SchemaTree) String() string {
 	return s + "}"
 }
 
+// thread-safe
 func (tree *SchemaTree) Insert(s *subjectSummary, updateSupport bool) {
 	properties := s.properties
 
@@ -224,7 +227,10 @@ func (tree *SchemaTree) Save(filePath string) error {
 	}
 	defer f.Close()
 
-	err = gob.NewEncoder(f).Encode(tree)
+	w := gzip.NewWriter(f)
+	defer w.Close()
+
+	err = gob.NewEncoder(w).Encode(tree)
 
 	if err == nil {
 		fmt.Printf("done (%v)\n", time.Since(t1))
@@ -249,9 +255,15 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 		return nil, err
 	}
 
+	r, err := gzip.NewReader(f)
+	if err != nil {
+		fmt.Printf("Encountered error while trying to decompress the file: %v\n", err)
+		return nil, err
+	}
+
 	tree := new(SchemaTree)
 	// err = sereal.Unmarshal(serialized, tree)
-	err = gob.NewDecoder(f).Decode(tree)
+	err = gob.NewDecoder(r).Decode(tree)
 	if err != nil {
 		fmt.Printf("Encountered error while decoding the file: %v\n", err)
 		return nil, err

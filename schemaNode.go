@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"unsafe"
 )
@@ -29,20 +30,24 @@ func (node *schemaNode) incrementSupport() {
 	atomic.AddUint32(&node.Support, 1)
 }
 
-// TODO make thread safe
+// TODO improve thread safeness
 func (node *schemaNode) insertTypes(types []*iType) {
 	// update typ "counts" at tail
 	if len(types) > 0 {
+		globalNodeLock.Lock()
 		if node.Types == nil {
 			node.Types = make(map[*iType]uint32)
 		}
 		for _, t := range types {
 			node.Types[t]++
 		}
+		globalNodeLock.Unlock()
 	}
 }
 
-// TODO make thread safe
+// thread-safe!
+var globalNodeLock sync.RWMutex
+
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	//// hash map based
 	// child, ok := node.children[term]
@@ -54,9 +59,23 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	// }
 	// return child
 
+	globalNodeLock.RLock()
 	// binary search for the child
 	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i])) >= uintptr(unsafe.Pointer(term)) })
 	if i < len(node.Children) && node.Children[i].ID == term {
+		defer globalNodeLock.RUnlock()
+		return node.Children[i]
+	}
+
+	globalNodeLock.RUnlock()
+
+	// We have to add the child, aquire a write lock
+	globalNodeLock.Lock()
+
+	// search again, since child might meanwhile have been added by other thread
+	i = sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i])) >= uintptr(unsafe.Pointer(term)) })
+	if i < len(node.Children) && node.Children[i].ID == term {
+		defer globalNodeLock.Unlock()
 		return node.Children[i]
 	}
 
@@ -70,10 +89,13 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	copy(node.Children[i+1:], node.Children[i:])
 	node.Children[i] = newChild
 
+	globalNodeLock.Unlock()
+
 	return newChild
 }
 
 // internal! propertyPath *MUST* be sorted in sortOrder (i.e. descending support)
+// thread-safe!
 func (node *schemaNode) prefixContains(propertyPath *iList) bool {
 	nextP := len(*propertyPath) - 1                        // index of property expected to be seen next
 	for cur := node; cur.parent != nil; cur = cur.parent { // walk from leaf towards root
