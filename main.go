@@ -7,6 +7,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
+	"runtime/trace"
 	"time"
 )
 
@@ -52,8 +53,9 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 func main() {
 	fileName := flag.String("file", "10M.nt.gz", "the file to parse")
 	firstNsubjects := flag.Int64("n", 0, "Only parse the first n subjects") // TODO: handle negative inputs
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
+	traceFile := flag.String("trace", "", "write execution trace to `file`")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -68,6 +70,18 @@ func main() {
 			log.Fatal("could not start CPU profile: ", err)
 		}
 		defer pprof.StopCPUProfile()
+	}
+
+	// write cpu profile to file
+	if *traceFile != "" {
+		f, err := os.Create(*traceFile)
+		if err != nil {
+			log.Fatal("could not create trace file: ", err)
+		}
+		if err := trace.Start(f); err != nil {
+			log.Fatal("could not start tracing: ", err)
+		}
+		defer trace.Stop()
 	}
 
 	t1 := time.Now()
