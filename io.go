@@ -39,27 +39,38 @@ func (subj *subjectSummary) String() string {
 
 // Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
 func subjectSummaryReader(fileName string, propMap *propMap, typeMap *typeMap) chan *subjectSummary {
-	c := make(chan *subjectSummary)
+	c := make(chan *subjectSummary, 100) // buffered channel with up to 100 buffered elements
 	go func() {
 		defer close(c)
 
-		file, err := os.Open(fileName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
+		var scanner *bufio.Scanner
 
-		var reader io.Reader = file
-		switch ext := filepath.Ext(fileName); ext {
-		case ".bz2":
-			reader = bzip2.NewReader(reader) // Decompression
-		case ".gz":
-			reader, err = gzip.NewReader(reader)
+		stat, _ := os.Stdin.Stat()
+		if (stat.Mode() & os.ModeCharDevice) == 0 {
+			fmt.Println("Reading data from stdin")
+
+			scanner = bufio.NewScanner(os.Stdin)
+		} else {
+			fmt.Printf("Reading data from file '%v'\n", fileName)
+
+			file, err := os.Open(fileName)
 			if err != nil {
 				log.Fatal(err)
 			}
+			defer file.Close()
+
+			var reader io.Reader = file
+			switch ext := filepath.Ext(fileName); ext {
+			case ".bz2":
+				reader = bzip2.NewReader(reader) // Decompression
+			case ".gz":
+				reader, err = gzip.NewReader(reader)
+				if err != nil {
+					log.Fatal(err)
+				}
+			}
+			scanner = bufio.NewScanner(reader)
 		}
-		scanner := bufio.NewScanner(reader)
 
 		var line, token []byte
 		var lastSubj string
@@ -106,7 +117,7 @@ func subjectSummaryReader(fileName string, propMap *propMap, typeMap *typeMap) c
 			}
 		}
 
-		if scanner.Err() != nil {
+		if err := scanner.Err(); err != nil {
 			log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
 		}
 
