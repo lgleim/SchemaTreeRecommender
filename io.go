@@ -38,91 +38,96 @@ func (subj *subjectSummary) String() string {
 }
 
 // Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
-func subjectSummaryReader(fileName string, propMap *propMap, typeMap *typeMap) chan *subjectSummary {
-	c := make(chan *subjectSummary, 100) // buffered channel with up to 100 buffered elements
-	go func() {
-		defer close(c)
+func subjectSummaryReader(
+	fileName string,
+	propMap *propMap,
+	typeMap *typeMap,
+	handler func(s subjectSummary),
+	firstN uint64,
+) {
+	// setting up IO
+	var scanner *bufio.Scanner
+	stat, _ := os.Stdin.Stat()
+	if (stat.Mode() & os.ModeCharDevice) == 0 {
+		fmt.Println("Reading data from stdin")
 
-		var scanner *bufio.Scanner
+		scanner = bufio.NewScanner(os.Stdin)
+	} else {
+		fmt.Printf("Reading data from file '%v'\n", fileName)
 
-		stat, _ := os.Stdin.Stat()
-		if (stat.Mode() & os.ModeCharDevice) == 0 {
-			fmt.Println("Reading data from stdin")
+		file, err := os.Open(fileName)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
 
-			scanner = bufio.NewScanner(os.Stdin)
-		} else {
-			fmt.Printf("Reading data from file '%v'\n", fileName)
-
-			file, err := os.Open(fileName)
+		var reader io.Reader = file
+		switch ext := filepath.Ext(fileName); ext {
+		case ".bz2":
+			reader = bzip2.NewReader(reader) // Decompression
+		case ".gz":
+			reader, err = gzip.NewReader(reader)
 			if err != nil {
 				log.Fatal(err)
 			}
-			defer file.Close()
+		}
+		scanner = bufio.NewScanner(reader)
+	}
 
-			var reader io.Reader = file
-			switch ext := filepath.Ext(fileName); ext {
-			case ".bz2":
-				reader = bzip2.NewReader(reader) // Decompression
-			case ".gz":
-				reader, err = gzip.NewReader(reader)
-				if err != nil {
-					log.Fatal(err)
-				}
-			}
-			scanner = bufio.NewScanner(reader)
+	// Parsing file
+	var line, token []byte
+	var lastSubj string
+	var bytesProcessed int
+	var subjectCount uint64
+	pMap, tMap := *propMap, *typeMap
+	rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+	summary := &subjectSummary{[]*iType{}, []*iItem{}}
+
+	for scanner.Scan() {
+		line = scanner.Bytes()
+
+		// process subject
+		bytesProcessed, token = firstWord(line)
+
+		// if r, _ := utf8.DecodeRune(token); r == '#' { // line is a comment
+		if token[0] == '#' { // line is a comment
+			continue
 		}
 
-		var line, token []byte
-		var lastSubj string
-		var bytesProcessed int
-		pMap, tMap := *propMap, *typeMap
-		rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-		summary := &subjectSummary{[]*iType{}, []*iItem{}}
-
-		for scanner.Scan() {
-			line = scanner.Bytes()
-
-			// process subject
-			bytesProcessed, token = firstWord(line)
-
-			// if r, _ := utf8.DecodeRune(token); r == '#' { // line is a comment
-			if token[0] == '#' { // line is a comment
-				continue
-			}
-
-			// If this a new subject, emit the previous predicate set and start clean
-			if lastSubj != string(token) { // should only be allocated on stack - c.f. https://github.com/golang/go/issues/11777
-				if lastSubj != "" {
-					c <- summary
+		// If this a new subject, emit the previous predicate set and start clean
+		if lastSubj != string(token) { // should only be allocated on stack - c.f. https://github.com/golang/go/issues/11777
+			if lastSubj != "" {
+				go handler(*summary)
+				if subjectCount++; firstN > 0 && subjectCount >= firstN {
+					break
 				}
-
-				lastSubj = string(token) // allocate string (on heap)
-				summary = &subjectSummary{[]*iType{}, []*iItem{}}
 			}
 
-			// process predicate
+			lastSubj = string(token) // allocate string (on heap)
+			summary = &subjectSummary{[]*iType{}, []*iItem{}}
+		}
+
+		// process predicate
+		line = line[bytesProcessed:]
+		bytesProcessed, token = firstWord(line)
+
+		predicate := pMap.get(string(token))
+		summary.properties = append(summary.properties, predicate)
+
+		// rdf:type statements are also added to the types list
+		if predicate == rdfType {
+			// process object
 			line = line[bytesProcessed:]
 			bytesProcessed, token = firstWord(line)
 
-			predicate := pMap.get(string(token))
-			summary.properties = append(summary.properties, predicate)
-
-			// rdf:type statements are also added to the types list
-			if predicate == rdfType {
-				// process object
-				line = line[bytesProcessed:]
-				bytesProcessed, token = firstWord(line)
-
-				summary.types = append(summary.types, tMap.get(string(token)))
-			}
+			summary.types = append(summary.types, tMap.get(string(token)))
 		}
+	}
 
-		if err := scanner.Err(); err != nil {
-			log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
-		}
+	if err := scanner.Err(); err != nil {
+		log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
+	}
 
-	}()
-	return c
 }
 
 // Adapted from 'ScanWords' in https://golang.org/src/bufio/scan.go

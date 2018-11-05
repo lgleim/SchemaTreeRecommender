@@ -34,19 +34,20 @@ func (node *schemaNode) incrementSupport() {
 func (node *schemaNode) insertTypes(types []*iType) {
 	// update typ "counts" at tail
 	if len(types) > 0 {
-		globalNodeLock.Lock()
+		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
 		if node.Types == nil {
 			node.Types = make(map[*iType]uint32)
 		}
 		for _, t := range types {
 			node.Types[t]++
 		}
-		globalNodeLock.Unlock()
+		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 	}
 }
 
 // thread-safe!
-var globalNodeLock sync.RWMutex
+const lockPrime = 97 // arbitrary prime number
+var globalNodeLocks [97]sync.RWMutex
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	//// hash map based
@@ -59,23 +60,23 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	// }
 	// return child
 
-	globalNodeLock.RLock()
+	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 	// binary search for the child
 	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i])) >= uintptr(unsafe.Pointer(term)) })
 	if i < len(node.Children) && node.Children[i].ID == term {
-		defer globalNodeLock.RUnlock()
+		defer globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
 		return node.Children[i]
 	}
 
-	globalNodeLock.RUnlock()
+	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
 
 	// We have to add the child, aquire a write lock
-	globalNodeLock.Lock()
+	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
 
 	// search again, since child might meanwhile have been added by other thread
 	i = sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i])) >= uintptr(unsafe.Pointer(term)) })
 	if i < len(node.Children) && node.Children[i].ID == term {
-		defer globalNodeLock.Unlock()
+		defer globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 		return node.Children[i]
 	}
 
@@ -89,7 +90,7 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	copy(node.Children[i+1:], node.Children[i:])
 	node.Children[i] = newChild
 
-	globalNodeLock.Unlock()
+	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 
 	return newChild
 }

@@ -7,8 +7,6 @@ import (
 	"os"
 	"runtime"
 	"runtime/pprof"
-	"sync"
-	"sync/atomic"
 	"time"
 )
 
@@ -24,53 +22,26 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	}
 
 	PrintMemUsage()
-	c := subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap)
 
-	concurrency := 25
-	var wg sync.WaitGroup // goroutine coordination
-	wg.Add(concurrency)
-	var subjectCount uint64
-	for i := 0; i < concurrency; i++ {
-		go func() {
-			for subjectSummary := range c {
-				for _, prop := range subjectSummary.properties {
-					prop.increment()
-				}
-
-				if atomic.AddUint64(&subjectCount, 1); firstN > 0 && subjectCount >= firstN {
-					break
-				}
-			}
-			wg.Done()
-		}()
+	counter := func(s subjectSummary) {
+		for _, prop := range s.properties {
+			prop.increment()
+		}
 	}
-	wg.Wait()
+	subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap, counter, firstN)
 
 	fmt.Println("First Pass:", time.Since(t1))
 	PrintMemUsage()
 
 	// second pass
 	t1 = time.Now()
-	c = subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap)
 
 	schema.updateSortOrder()
 
-	subjectCount = 0
-	// concurrency = 12
-	wg.Add(concurrency)
-	for i := 0; i < concurrency; i++ {
-		go func() {
-			for subjectSummary := range c {
-				schema.Insert(subjectSummary, false)
-
-				if atomic.AddUint64(&subjectCount, 1); firstN > 0 && subjectCount >= firstN {
-					break
-				}
-			}
-			wg.Done()
-		}()
+	inserter := func(s subjectSummary) {
+		schema.Insert(&s, false)
 	}
-	wg.Wait()
+	subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap, inserter, firstN)
 
 	fmt.Println("Second Pass:", time.Since(t1))
 	PrintMemUsage()
@@ -80,7 +51,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 
 func main() {
 	fileName := flag.String("file", "10M.nt.gz", "the file to parse")
-	firstNsubjects := uint64(*flag.Int64("n", 0, "Only parse the first n subjects")) // TODO: handle negative inputs
+	firstNsubjects := flag.Int64("n", 0, "Only parse the first n subjects") // TODO: handle negative inputs
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
 
@@ -100,7 +71,7 @@ func main() {
 	}
 
 	t1 := time.Now()
-	schema := twoPass(*fileName, firstNsubjects)
+	schema := twoPass(*fileName, uint64(*firstNsubjects))
 
 	// r := &renderer.PNGRenderer{
 	// 	OutputFile: "my_graph.png",
@@ -119,12 +90,12 @@ func main() {
 	PrintMemUsage()
 	fmt.Println(rec[:10])
 
-	schema.Save("schemaTree.bin")
-	schema, _ = LoadSchemaTree("schemaTree.bin")
-	rec = schema.recommendProperty(list)
+	// schema.Save("schemaTree.bin")
+	// schema, _ = LoadSchemaTree("schemaTree.bin")
+	// rec = schema.recommendProperty(list)
 
-	PrintMemUsage()
-	fmt.Println(rec[:10])
+	// PrintMemUsage()
+	// fmt.Println(rec[:10])
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
