@@ -190,11 +190,9 @@ func isSpaceOrBracket(r rune) bool {
 	if r <= '\u00FF' {
 		// Obvious ASCII ones: \t through \r plus space. Plus two Latin-1 oddballs.
 		switch r {
-		case ' ', '\t', '\n', '\v', '\f', '\r':
+		case ' ', '\t', '\n', '\v', '\f', '\r', '<', '>':
 			return true
 		case '\u0085', '\u00A0':
-			return true
-		case '<', '>': // n-triples IRI brackets
 			return true
 		}
 		return false
