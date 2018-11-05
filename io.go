@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"unicode/utf8"
 
+	"github.com/biogo/hts/bgzf"
 	gzip "github.com/klauspost/pgzip"
 )
 
@@ -70,6 +71,13 @@ func subjectSummaryReader(
 			if err != nil {
 				log.Fatal(err)
 			}
+		case ".bgz":
+			tmp, err := bgzf.NewReader(reader, 0)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer tmp.Close()
+			reader = tmp
 		}
 		scanner = bufio.NewScanner(reader)
 	}
