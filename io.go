@@ -47,12 +47,11 @@ func subjectSummaryReader(
 	firstN uint64,
 ) {
 	// setting up IO
-	var scanner *bufio.Scanner
-	stat, _ := os.Stdin.Stat()
-	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		fmt.Println("Reading data from stdin")
+	var reader io.Reader
 
-		scanner = bufio.NewScanner(os.Stdin)
+	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+		fmt.Println("Reading data from stdin")
+		reader = os.Stdin
 	} else {
 		fmt.Printf("Reading data from file '%v'\n", fileName)
 
@@ -62,7 +61,7 @@ func subjectSummaryReader(
 		}
 		defer file.Close()
 
-		var reader io.Reader = file
+		reader = file
 		switch ext := filepath.Ext(fileName); ext {
 		case ".bz2":
 			reader = bzip2.NewReader(reader) // Decompression
@@ -79,8 +78,9 @@ func subjectSummaryReader(
 			defer tmp.Close()
 			reader = tmp
 		}
-		scanner = bufio.NewScanner(reader)
 	}
+
+	scanner := bufio.NewScanner(reader)
 
 	// Parsing file
 	var line, token []byte
