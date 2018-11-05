@@ -79,7 +79,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 }
 
 func main() {
-	fileName := flag.String("file", "10M.nt", "the file to parse")
+	fileName := flag.String("file", "10M.nt.gz", "the file to parse")
 	firstNsubjects := uint64(*flag.Int64("n", 0, "Only parse the first n subjects")) // TODO: handle negative inputs
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to file")
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
