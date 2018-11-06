@@ -13,11 +13,14 @@ import (
 	"io"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"unicode/utf8"
 
 	"github.com/biogo/hts/bgzf"
 	gzip "github.com/klauspost/pgzip"
+	"github.com/mitchellh/ioprogress"
 )
 
 // All type annotations (types) and properties (properties) for a fixed subject
@@ -70,6 +73,29 @@ func subjectSummaryReader(
 			if err != nil {
 				log.Fatal(err)
 			}
+			cmd := fmt.Sprintf("gzip -l %v | awk '{print $2}' | sed -n '2 p'", fileName)
+			out, err := exec.Command("bash", "-c", cmd).Output()
+			if err != nil {
+				log.Fatal(err)
+			}
+			size, err := strconv.ParseInt(string(out[:len(out)-1]), 10, 64)
+			// fmt.Println(string(out), size, err)
+			if err == nil {
+				bar := ioprogress.DrawTextFormatBar(48)
+				reader = &ioprogress.Reader{
+					Reader: reader,
+					Size:   size,
+					DrawFunc: ioprogress.DrawTerminalf(
+						os.Stdout,
+						func(progress, total int64) string {
+							return fmt.Sprintf(
+								"Parsing %s %s",
+								bar(progress, total),
+								ioprogress.DrawTextFormatBytes(progress, total))
+						}),
+				}
+			}
+
 		case ".bgz":
 			tmp, err := bgzf.NewReader(reader, 0)
 			if err != nil {
