@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"sync"
 	"time"
 	"unsafe"
 
@@ -95,7 +94,7 @@ func (tree *SchemaTree) updateSortOrder() {
 	// update term's internal sortOrder
 	// Runtime: O(n), Memory: -
 	for i, v := range iList {
-		v.SortOrder = uint16(i)
+		v.sortOrder = uint16(i)
 	}
 }
 
@@ -230,7 +229,36 @@ func (tree *SchemaTree) Save(filePath string) error {
 	w := gzip.NewWriter(f)
 	defer w.Close()
 
-	err = gob.NewEncoder(w).Encode(tree)
+	e := gob.NewEncoder(w)
+
+	// encode propMap
+	props := make([]*iItem, len(tree.propMap), len(tree.propMap))
+	for _, p := range tree.propMap {
+		props[p.sortOrder] = p
+	}
+	err = e.Encode(props)
+	if err != nil {
+		return err
+	}
+
+	// encode typeMap
+	types := make(map[uintptr]*iType, len(tree.typeMap))
+	for _, t := range tree.typeMap {
+		types[uintptr(unsafe.Pointer(t))] = t
+	}
+	err = e.Encode(types)
+	if err != nil {
+		return err
+	}
+
+	// encode MinSup
+	err = e.Encode(tree.MinSup)
+	if err != nil {
+		return err
+	}
+
+	// encode root
+	err = tree.Root.writeGob(e)
 
 	if err == nil {
 		fmt.Printf("done (%v)\n", time.Since(t1))
@@ -263,78 +291,45 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 
 	tree := new(SchemaTree)
 	// err = sereal.Unmarshal(serialized, tree)
-	err = gob.NewDecoder(r).Decode(tree)
+	d := gob.NewDecoder(r)
+
+	// decode propMap
+	var props []*iItem
+	err = d.Decode(&props)
+	if err != nil {
+		return nil, err
+	}
+	tree.propMap = make(propMap)
+	for sortOrder, item := range props {
+		item.sortOrder = uint16(sortOrder)
+		tree.propMap[*item.Str] = item
+	}
+
+	// decode typeMap
+	var types map[uintptr]*iType
+	err = d.Decode(&types)
+	if err != nil {
+		return nil, err
+	}
+	tree.typeMap = make(typeMap)
+	for _, t := range types {
+		tree.typeMap[*t.Str] = t
+	}
+
+	// decode MinSup
+	err = d.Decode(&tree.MinSup)
+	if err != nil {
+		return nil, err
+	}
+
+	// decode Root
+	err = tree.Root.decodeGob(d, &props, &types)
+
 	if err != nil {
 		fmt.Printf("Encountered error while decoding the file: %v\n", err)
 		return nil, err
 	}
 
 	fmt.Println(time.Since(t1))
-
-	fmt.Printf("Restructuring schema tree: ")
-	t1 = time.Now()
-
-	// reinstantiate propMap and typeMap
-	tree.propMap = make(propMap)
-	tree.typeMap = make(typeMap)
-
-	var wg sync.WaitGroup // goroutine coordination
-
-	// fixes parent pointers & children sort order
-	var parallelFix func(node *schemaNode, parent *schemaNode)
-	parallelFix = func(node *schemaNode, parent *schemaNode) {
-		//recurse
-		wg.Add(len(node.Children))
-		for _, child := range node.Children {
-			go parallelFix(child, node)
-		}
-
-		// parent link reconstruction
-		node.parent = parent
-
-		// fixing sort order of schemaNode.children arrays (sorted by *changed* pointer addresses)
-		sort.Slice(node.Children, func(i, j int) bool {
-			return uintptr(unsafe.Pointer(node.Children[i])) < uintptr(unsafe.Pointer(node.Children[j]))
-		})
-		wg.Done()
-	}
-
-	// repopulates propMap and typeMap & deduplicates the corresponding iItems and iTypes
-	var serialFix func(node *schemaNode)
-	serialFix = func(node *schemaNode) {
-		// property deduplication & traversal pointer repopulation
-		if prop, ok := tree.propMap[*node.ID.Str]; ok {
-			node.ID = prop
-			node.nextSameID = prop.traversalPointer
-			prop.traversalPointer = node
-		} else {
-			tree.propMap[*node.ID.Str] = node.ID
-			node.nextSameID = nil
-			node.ID.traversalPointer = node
-		}
-
-		// type deduplication
-		for class, support := range node.Types {
-			if dedupClass, ok := tree.typeMap[*class.Str]; ok {
-				delete(node.Types, class)
-				node.Types[dedupClass] = support
-			} else {
-				tree.typeMap[*class.Str] = class
-			}
-		}
-
-		// recurse
-		for _, child := range node.Children {
-			serialFix(child)
-		}
-	}
-
-	wg.Add(1)
-	go parallelFix(&tree.Root, nil)
-	serialFix(&tree.Root)
-
-	wg.Wait()
-	fmt.Println(time.Since(t1))
-
 	return tree, err
 }

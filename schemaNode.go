@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"fmt"
 	"sort"
 	"sync"
@@ -24,6 +25,91 @@ func newRootNode() schemaNode {
 	root := "root"
 	// return schemaNode{&iItem{&root, 0, 0, nil}, nil, make(map[*iItem]*schemaNode), nil, 0, nil}
 	return schemaNode{&iItem{&root, 0, 0, nil}, nil, []*schemaNode{}, nil, 0, nil}
+}
+
+func (node *schemaNode) writeGob(e *gob.Encoder) error {
+	// ID
+	err := e.Encode(node.ID.sortOrder)
+	if err != nil {
+		return err
+	}
+
+	// Support
+	err = e.Encode(node.Support)
+	if err != nil {
+		return err
+	}
+
+	// Children
+	err = e.Encode(len(node.Children))
+	if err != nil {
+		return err
+	}
+	for _, child := range node.Children {
+		err = child.writeGob(e)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Types
+	types := make(map[uintptr]uint32)
+	for t, count := range node.Types {
+		types[uintptr(unsafe.Pointer(t))] = count
+	}
+	err = e.Encode(types)
+	return err
+}
+
+func (node *schemaNode) decodeGob(d *gob.Decoder, props *[]*iItem, tMap *map[uintptr]*iType) error {
+	// ID
+	var id uint16
+	err := d.Decode(&id)
+	if err != nil {
+		return err
+	}
+	node.ID = (*props)[id]
+
+	// traversal pointer repopulation
+	node.nextSameID = node.ID.traversalPointer
+	node.ID.traversalPointer = node
+
+	// Support
+	err = d.Decode(&node.Support)
+	if err != nil {
+		return err
+	}
+
+	// Children
+	var length int
+	err = d.Decode(&length)
+	if err != nil {
+		return err
+	}
+	node.Children = make([]*schemaNode, length, length)
+	for i := 0; i < length; i++ {
+		node.Children[i] = &schemaNode{nil, node, nil, nil, 0, nil}
+		err = node.Children[i].decodeGob(d, props, tMap)
+		if err != nil {
+			return err
+		}
+	}
+	// fixing sort order of schemaNode.children arrays (sorted by *changed* pointer addresses)
+	sort.Slice(node.Children, func(i, j int) bool {
+		return uintptr(unsafe.Pointer(node.Children[i])) < uintptr(unsafe.Pointer(node.Children[j]))
+	})
+
+	// Types
+	var types map[uintptr]uint32
+	err = d.Decode(&types)
+	if err != nil {
+		return err
+	}
+	node.Types = make(map[*iType]uint32, len(types))
+	for t, count := range types {
+		node.Types[(*tMap)[t]] = count
+	}
+	return nil
 }
 
 func (node *schemaNode) incrementSupport() {
@@ -101,7 +187,7 @@ func (node *schemaNode) prefixContains(propertyPath *iList) bool {
 	nextP := len(*propertyPath) - 1                        // index of property expected to be seen next
 	for cur := node; cur.parent != nil; cur = cur.parent { // walk from leaf towards root
 
-		if cur.ID.SortOrder < (*propertyPath)[nextP].SortOrder { // we already walked past the next expected property
+		if cur.ID.sortOrder < (*propertyPath)[nextP].sortOrder { // we already walked past the next expected property
 			return false
 		}
 		if cur.ID == (*propertyPath)[nextP] {

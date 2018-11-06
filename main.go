@@ -104,12 +104,14 @@ func main() {
 	PrintMemUsage()
 	fmt.Println(rec[:10])
 
-	// schema.Save("schemaTree.bin")
-	// schema, _ = LoadSchemaTree("schemaTree.bin")
-	// rec = schema.recommendProperty(list)
-
-	// PrintMemUsage()
-	// fmt.Println(rec[:10])
+	schema.Save("schemaTree.bin")
+	schema, err := LoadSchemaTree("schemaTree.bin")
+	if err != nil {
+		fmt.Println(err)
+	}
+	rec = schema.recommendProperty(list)
+	PrintMemUsage()
+	fmt.Println(rec[:10])
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)

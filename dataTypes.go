@@ -37,7 +37,7 @@ func (m *typeMap) get(iri string) *iType {
 type iItem struct {
 	Str              *string
 	TotalCount       uint32
-	SortOrder        uint16
+	sortOrder        uint16
 	traversalPointer *schemaNode // node traversal pointer
 }
 
@@ -46,7 +46,7 @@ func (p *iItem) increment() {
 }
 
 func (p iItem) String() string {
-	return fmt.Sprint(p.TotalCount, "x\t", *p.Str, " (", p.SortOrder, ")")
+	return fmt.Sprint(p.TotalCount, "x\t", *p.Str, " (", p.sortOrder, ")")
 }
 
 type propMap map[string]*iItem
@@ -80,7 +80,7 @@ type iList []*iItem
 // sort the list according to the current iList sort order
 func (l *iList) sort() {
 	// sort the properties according to the current iList sort order
-	sort.Slice(*l, func(i, j int) bool { return (*l)[i].SortOrder < (*l)[j].SortOrder })
+	sort.Slice(*l, func(i, j int) bool { return (*l)[i].sortOrder < (*l)[j].sortOrder })
 }
 
 // inplace sorting and deduplication.
