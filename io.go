@@ -11,16 +11,20 @@ import (
 	"compress/bzip2"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strconv"
+	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/biogo/hts/bgzf"
 	gzip "github.com/klauspost/pgzip"
-	"github.com/mitchellh/ioprogress"
+	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
 // All type annotations (types) and properties (properties) for a fixed subject
@@ -46,7 +50,7 @@ func subjectSummaryReader(
 	fileName string,
 	propMap *propMap,
 	typeMap *typeMap,
-	handler func(s subjectSummary),
+	handler func(s *subjectSummary),
 	firstN uint64,
 ) {
 	// setting up IO
@@ -69,30 +73,21 @@ func subjectSummaryReader(
 		case ".bz2":
 			reader = bzip2.NewReader(reader) // Decompression
 		case ".gz":
-			reader, err = gzip.NewReader(reader)
+			tmp, err := gzip.NewReaderN(reader, 8*1024*1024, 48) // readahead
 			if err != nil {
 				log.Fatal(err)
 			}
-			cmd := fmt.Sprintf("gzip -l %v | awk '{print $2}' | sed -n '2 p'", fileName)
-			out, err := exec.Command("bash", "-c", cmd).Output()
-			if err != nil {
-				log.Fatal(err)
-			}
-			size, err := strconv.ParseInt(string(out[:len(out)-1]), 10, 64)
-			// fmt.Println(string(out), size, err)
-			if err == nil {
-				bar := ioprogress.DrawTextFormatBar(48)
-				reader = &ioprogress.Reader{
-					Reader: reader,
-					Size:   size,
-					DrawFunc: ioprogress.DrawTerminalf(
-						os.Stdout,
-						func(progress, total int64) string {
-							return fmt.Sprintf(
-								"Parsing %s %s",
-								bar(progress, total),
-								ioprogress.DrawTextFormatBytes(progress, total))
-						}),
+			reader = tmp
+			defer tmp.Close()
+			// cmd := fmt.Sprintf("gzip -l %v | awk '{print $2}' | sed -n '2 p'", fileName)
+			// out, err := exec.Command("bash", "-c", cmd).Output()
+			if dat, err := ioutil.ReadFile(fileName + ".size"); err == nil {
+				decimals := regexp.MustCompile("[^0-9]+").ReplaceAllString(string(dat), "")
+				if size, err := strconv.Atoi(decimals); err == nil {
+					// create and start progress bar
+					bar := pb.New(size).SetUnits(pb.U_BYTES).SetRefreshRate(500 * time.Millisecond).Start()
+					reader = bar.NewProxyReader(reader)
+					defer bar.Finish()
 				}
 			}
 
@@ -108,7 +103,21 @@ func subjectSummaryReader(
 
 	scanner := bufio.NewScanner(reader)
 
-	// Parsing file
+	// set up handler routines
+	concurrency := 4 * runtime.NumCPU()
+	summaries := make(chan *subjectSummary, 1000)
+	var wg sync.WaitGroup
+	wg.Add(concurrency)
+	for i := 0; i < concurrency; i++ {
+		go func() {
+			for s := range summaries {
+				handler(s)
+			}
+			wg.Done()
+		}()
+	}
+
+	// parse file
 	var line, token []byte
 	var lastSubj string
 	var bytesProcessed int
@@ -131,14 +140,14 @@ func subjectSummaryReader(
 		// If this a new subject, emit the previous predicate set and start clean
 		if lastSubj != string(token) { // should only be allocated on stack - c.f. https://github.com/golang/go/issues/11777
 			if lastSubj != "" {
-				go handler(*summary)
+				summaries <- summary
 				if subjectCount++; firstN > 0 && subjectCount >= firstN {
 					break
 				}
 			}
 
 			lastSubj = string(token) // allocate string (on heap)
-			summary = &subjectSummary{[]*iType{}, []*iItem{}}
+			summary = &subjectSummary{[]*iType{}, make([]*iItem, 0, 1024)}
 		}
 
 		// process predicate
@@ -161,7 +170,8 @@ func subjectSummaryReader(
 	if err := scanner.Err(); err != nil {
 		log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
 	}
-
+	close(summaries)
+	wg.Wait()
 }
 
 // Adapted from 'ScanWords' in https://golang.org/src/bufio/scan.go

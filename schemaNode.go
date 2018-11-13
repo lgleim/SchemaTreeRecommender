@@ -61,42 +61,48 @@ func (node *schemaNode) writeGob(e *gob.Encoder) error {
 	return err
 }
 
-func (node *schemaNode) decodeGob(d *gob.Decoder, props *[]*iItem, tMap *map[uintptr]*iType) error {
-	// ID
-	var id uint16
-	err := d.Decode(&id)
-	if err != nil {
-		return err
-	}
-	node.ID = (*props)[id]
+func (node *schemaNode) decodeGob(d *gob.Decoder, props []*iItem, tMap map[uintptr]*iType) error {
+	// function scoping to allow for garbage collection
+	err := func() error {
+		// ID
+		var id uint16
+		err := d.Decode(&id)
+		if err != nil {
+			return err
+		}
+		node.ID = props[int(id)]
 
-	// traversal pointer repopulation
-	node.nextSameID = node.ID.traversalPointer
-	node.ID.traversalPointer = node
+		// traversal pointer repopulation
+		node.nextSameID = node.ID.traversalPointer
+		node.ID.traversalPointer = node
 
-	// Support
-	err = d.Decode(&node.Support)
-	if err != nil {
-		return err
-	}
+		// Support
+		err = d.Decode(&node.Support)
+		if err != nil {
+			return err
+		}
 
-	// Children
-	var length int
-	err = d.Decode(&length)
-	if err != nil {
-		return err
-	}
-	node.Children = make([]*schemaNode, length, length)
-	for i := 0; i < length; i++ {
+		// Children
+		var length int
+		err = d.Decode(&length)
+		if err != nil {
+			return err
+		}
+		node.Children = make([]*schemaNode, length, length)
+
+		return nil
+	}()
+	for i := range node.Children {
 		node.Children[i] = &schemaNode{nil, node, nil, nil, 0, nil}
 		err = node.Children[i].decodeGob(d, props, tMap)
 		if err != nil {
 			return err
 		}
+		// node.Children[i].parent = node
 	}
 	// fixing sort order of schemaNode.children arrays (sorted by *changed* pointer addresses)
 	sort.Slice(node.Children, func(i, j int) bool {
-		return uintptr(unsafe.Pointer(node.Children[i])) < uintptr(unsafe.Pointer(node.Children[j]))
+		return uintptr(unsafe.Pointer(node.Children[i].ID)) < uintptr(unsafe.Pointer(node.Children[j].ID))
 	})
 
 	// Types
@@ -105,10 +111,14 @@ func (node *schemaNode) decodeGob(d *gob.Decoder, props *[]*iItem, tMap *map[uin
 	if err != nil {
 		return err
 	}
-	node.Types = make(map[*iType]uint32, len(types))
-	for t, count := range types {
-		node.Types[(*tMap)[t]] = count
+
+	if len(types) > 0 {
+		node.Types = make(map[*iType]uint32)
+		for t, count := range types {
+			node.Types[tMap[t]] = count
+		}
 	}
+
 	return nil
 }
 
@@ -148,7 +158,7 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 
 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 	// binary search for the child
-	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i])) >= uintptr(unsafe.Pointer(term)) })
+	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
 	if i < len(node.Children) && node.Children[i].ID == term {
 		defer globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
 		return node.Children[i]
@@ -160,7 +170,7 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
 
 	// search again, since child might meanwhile have been added by other thread
-	i = sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i])) >= uintptr(unsafe.Pointer(term)) })
+	i = sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
 	if i < len(node.Children) && node.Children[i].ID == term {
 		defer globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 		return node.Children[i]
@@ -183,14 +193,14 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 
 // internal! propertyPath *MUST* be sorted in sortOrder (i.e. descending support)
 // thread-safe!
-func (node *schemaNode) prefixContains(propertyPath *iList) bool {
-	nextP := len(*propertyPath) - 1                        // index of property expected to be seen next
+func (node *schemaNode) prefixContains(propertyPath iList) bool {
+	nextP := len(propertyPath) - 1                         // index of property expected to be seen next
 	for cur := node; cur.parent != nil; cur = cur.parent { // walk from leaf towards root
 
-		if cur.ID.sortOrder < (*propertyPath)[nextP].sortOrder { // we already walked past the next expected property
+		if cur.ID.sortOrder < propertyPath[nextP].sortOrder { // we already walked past the next expected property
 			return false
 		}
-		if cur.ID == (*propertyPath)[nextP] {
+		if cur.ID == propertyPath[nextP] {
 			nextP--
 			if nextP < 0 { // we encountered all expected properties!
 				return true
