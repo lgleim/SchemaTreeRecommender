@@ -133,7 +133,7 @@ func (node *schemaNode) insertTypes(types []*iType) {
 
 // thread-safe!
 const lockPrime = 97 // arbitrary prime number
-var globalNodeLocks [97]sync.RWMutex
+var globalNodeLocks [lockPrime]sync.RWMutex
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	//// hash map based

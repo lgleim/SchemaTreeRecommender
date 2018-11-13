@@ -11,6 +11,10 @@ import (
 	gzip "github.com/klauspost/pgzip"
 )
 
+const workerConcurrency = 13
+
+var adders [workerConcurrency]chan *uint32
+
 type SchemaTree struct {
 	propMap propMap
 	typeMap typeMap
@@ -18,12 +22,37 @@ type SchemaTree struct {
 	MinSup  uint32
 }
 
-func newSchemaTree() SchemaTree {
-	return SchemaTree{
+// NewSchemaTree returns a newly allocated and initialized schema tree
+func NewSchemaTree() (tree SchemaTree) {
+	tree = SchemaTree{
 		propMap: make(propMap),
 		typeMap: make(typeMap),
 		Root:    newRootNode(),
 		MinSup:  3,
+	}
+	tree.init()
+	return
+}
+
+// Init initializes the datastructure for usage
+func (tree *SchemaTree) init() {
+	// initialize support counter workers
+	for i := range tree.adders {
+		tree.adders[i] = make(chan *uint32) // TODO: buffering likely break transactional consistency of schema tree
+
+		// dispatch worker coroutine
+		go func(ptrs chan *uint32) {
+			for p := range ptrs {
+				(*p)++
+			}
+		}(tree.adders[i])
+	}
+}
+
+func (tree *SchemaTree) destroy() {
+	// destroy support counter workers
+	for _, adder := range tree.adders {
+		close(adder)
 	}
 }
 
@@ -213,13 +242,6 @@ func (tree *SchemaTree) Save(filePath string) error {
 	t1 := time.Now()
 	fmt.Printf("Writing schema to file %v... ", filePath)
 
-	// // Sereal lib would be nicer since it supports serialization of object references, including circular references.
-	// // See https://github.com/Sereal/Sereal
-	// e := sereal.NewEncoder()
-	// // e.Compression = sereal.SnappyCompressor{Incremental: true}
-	// serialized, err := e.Marshal(tree)
-	// err = ioutil.WriteFile(filePath, serialized, 0644)
-
 	f, err := os.Create(filePath)
 	if err != nil {
 		return err
@@ -276,7 +298,6 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	fmt.Printf("Loading schema (from file %v): ", filePath)
 	t1 := time.Now()
 
-	// serialized, err := ioutil.ReadFile(filePath)
 	f, err := os.Open(filePath)
 	if err != nil {
 		fmt.Printf("Encountered error while trying to open the file: %v\n", err)
