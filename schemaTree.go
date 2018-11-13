@@ -110,7 +110,7 @@ func (tree *SchemaTree) Support(properties iList) uint32 {
 
 	// check all branches that include least frequent term
 	for term := properties[len(properties)-1].traversalPointer; term != nil; term = term.nextSameID {
-		if term.prefixContains(&properties) {
+		if term.prefixContains(properties) {
 			support += term.Support
 		}
 	}
@@ -119,7 +119,7 @@ func (tree *SchemaTree) Support(properties iList) uint32 {
 }
 
 func (tree *SchemaTree) recommendProperty(properties iList) propertyRecommendations {
-	var setSupport uint32
+	var setSupport uint64
 	//tree.root.support // empty set occured in all transactions
 
 	properties.sort() // descending by support
@@ -137,14 +137,17 @@ func (tree *SchemaTree) recommendProperty(properties iList) propertyRecommendati
 	}
 
 	// walk from each leaf towards root...l
-	for leaf := properties[len(properties)-1].traversalPointer; leaf != nil; leaf = leaf.nextSameID {
-		if leaf.prefixContains(&properties) {
-			setSupport += leaf.Support // number of occuences of this set of properties in the current branch
+	for leaf := properties[len(properties)-1].traversalPointer; leaf != nil; leaf = leaf.nextSameID { // iterate all instances for that property
+		if leaf.prefixContains(properties) {
+			setSupport += uint64(leaf.Support) // number of occuences of this set of properties in the current branch
+
+			// walk up
 			for cur := leaf; cur.parent != nil; cur = cur.parent {
 				if !(pSet[cur.ID]) {
 					candidates[cur.ID] += leaf.Support
 				}
 			}
+			// walk down
 			makeCandidates(leaf)
 		}
 	}
@@ -234,7 +237,7 @@ func (tree *SchemaTree) Save(filePath string) error {
 	// encode propMap
 	props := make([]*iItem, len(tree.propMap), len(tree.propMap))
 	for _, p := range tree.propMap {
-		props[p.sortOrder] = p
+		props[int(p.sortOrder)] = p
 	}
 	err = e.Encode(props)
 	if err != nil {
@@ -288,6 +291,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 		fmt.Printf("Encountered error while trying to decompress the file: %v\n", err)
 		return nil, err
 	}
+	defer r.Close()
 
 	tree := new(SchemaTree)
 	// err = sereal.Unmarshal(serialized, tree)
@@ -304,6 +308,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 		item.sortOrder = uint16(sortOrder)
 		tree.propMap[*item.Str] = item
 	}
+	fmt.Printf("%v properties... ", len(props))
 
 	// decode typeMap
 	var types map[uintptr]*iType
@@ -315,6 +320,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	for _, t := range types {
 		tree.typeMap[*t.Str] = t
 	}
+	fmt.Printf("%v types... ", len(types))
 
 	// decode MinSup
 	err = d.Decode(&tree.MinSup)
@@ -323,7 +329,8 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	}
 
 	// decode Root
-	err = tree.Root.decodeGob(d, &props, &types)
+	fmt.Printf("decoding tree...")
+	err = tree.Root.decodeGob(d, props, types)
 
 	if err != nil {
 		fmt.Printf("Encountered error while decoding the file: %v\n", err)
