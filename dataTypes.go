@@ -21,6 +21,7 @@ func (t *iType) increment() {
 
 type typeMap map[string]*iType
 
+// Todo: make thread safe! c.f. propertyadder
 func (m *typeMap) get(iri string) *iType {
 	item, ok := (*m)[iri]
 	if !ok {
@@ -51,13 +52,11 @@ func (p iItem) String() string {
 
 type propMap map[string]*iItem
 
-var propMapLock sync.RWMutex
+var propMapLock sync.Mutex
 
 // thread-safe
 func (m *propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
-	propMapLock.RLock()
 	item, ok := (*m)[iri]
-	propMapLock.RUnlock()
 
 	if !ok {
 		propMapLock.Lock()

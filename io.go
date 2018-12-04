@@ -48,8 +48,8 @@ func (subj *subjectSummary) String() string {
 // Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
 func subjectSummaryReader(
 	fileName string,
-	propMap *propMap,
-	typeMap *typeMap,
+	pMap propMap,
+	tMap typeMap,
 	handler func(s *subjectSummary),
 	firstN uint64,
 ) {
@@ -122,7 +122,6 @@ func subjectSummaryReader(
 	var lastSubj string
 	var bytesProcessed int
 	var subjectCount uint64
-	pMap, tMap := *propMap, *typeMap
 	rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 	summary := &subjectSummary{[]*iType{}, []*iItem{}}
 

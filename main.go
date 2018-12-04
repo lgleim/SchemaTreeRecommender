@@ -15,23 +15,17 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	// first pass: collect I-List and statistics
 	t1 := time.Now()
 
-	var schema SchemaTree
+	var schema *SchemaTree
 
 	if _, err := os.Stat(fileName + ".firstPass.bin"); os.IsNotExist(err) {
 		// preprocess
-		schema = SchemaTree{
-			propMap: make(propMap),
-			typeMap: make(typeMap),
-			Root:    newRootNode(),
-			MinSup:  3,
-		}
-
 		counter := func(s *subjectSummary) {
 			for _, prop := range s.properties {
 				prop.increment()
 			}
 		}
-		subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap, counter, firstN)
+		schema = NewSchemaTree()
+		subjectSummaryReader(fileName, schema.propMap, schema.typeMap, counter, firstN)
 
 		fmt.Println("First Pass:", time.Since(t1))
 		PrintMemUsage()
@@ -41,7 +35,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 		if err != nil {
 			log.Fatalln(err)
 		}
-		schema = *tmp
+		schema = tmp
 	}
 
 	// second pass
@@ -52,12 +46,12 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 	inserter := func(s *subjectSummary) {
 		schema.Insert(s, false)
 	}
-	subjectSummaryReader(fileName, &schema.propMap, &schema.typeMap, inserter, firstN)
+	subjectSummaryReader(fileName, schema.propMap, schema.typeMap, inserter, firstN)
 
 	fmt.Println("Second Pass:", time.Since(t1))
 	PrintMemUsage()
 
-	return &schema
+	return schema
 }
 
 func main() {

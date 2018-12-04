@@ -28,7 +28,7 @@ func emptyRootNodeTest(root schemaNode, t *testing.T) {
 }
 
 func TestSchemaTree(t *testing.T) {
-	tree := newSchemaTree()
+	tree := NewSchemaTree()
 
 	t.Run("Root is a proper empty root node", func(t *testing.T) { emptyRootNodeTest(tree.Root, t) })
 

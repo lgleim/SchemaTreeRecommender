@@ -13,18 +13,17 @@ import (
 
 const workerConcurrency = 13
 
-var adders [workerConcurrency]chan *uint32
-
 type SchemaTree struct {
 	propMap propMap
 	typeMap typeMap
 	Root    schemaNode
 	MinSup  uint32
+	adders  [workerConcurrency]chan *uint32
 }
 
 // NewSchemaTree returns a newly allocated and initialized schema tree
-func NewSchemaTree() (tree SchemaTree) {
-	tree = SchemaTree{
+func NewSchemaTree() (tree *SchemaTree) {
+	tree = &SchemaTree{
 		propMap: make(propMap),
 		typeMap: make(typeMap),
 		Root:    newRootNode(),
@@ -37,23 +36,25 @@ func NewSchemaTree() (tree SchemaTree) {
 // Init initializes the datastructure for usage
 func (tree *SchemaTree) init() {
 	// initialize support counter workers
-	for i := range tree.adders {
-		tree.adders[i] = make(chan *uint32) // TODO: buffering likely break transactional consistency of schema tree
+	// supportCounter := func(ptrs chan *uint32) {
+	// 	for p := range ptrs {
+	// 		(*p)++
+	// 	}
+	// }
 
-		// dispatch worker coroutine
-		go func(ptrs chan *uint32) {
-			for p := range ptrs {
-				(*p)++
-			}
-		}(tree.adders[i])
-	}
+	// for i := range tree.adders {
+	// 	if tree.adders[i] == nil {
+	// 		tree.adders[i] = make(chan *uint32) // TODO: buffering likely break transactional consistency of schema tree
+	// 		go supportCounter(tree.adders[i])   // dispatch worker coroutine
+	// 	}
+	// }
 }
 
 func (tree *SchemaTree) destroy() {
-	// destroy support counter workers
-	for _, adder := range tree.adders {
-		close(adder)
-	}
+	// // destroy support counter workers
+	// for _, adder := range tree.adders {
+	// 	close(adder)
+	// }
 }
 
 func (tree SchemaTree) String() string {
@@ -301,6 +302,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	fmt.Printf("Loading schema (from file %v): ", filePath)
 	t1 := time.Now()
 
+	/// file handling
 	f, err := os.Open(filePath)
 	if err != nil {
 		fmt.Printf("Encountered error while trying to open the file: %v\n", err)
@@ -314,8 +316,8 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	}
 	defer r.Close()
 
-	tree := new(SchemaTree)
-	// err = sereal.Unmarshal(serialized, tree)
+	/// decoding
+	tree := NewSchemaTree()
 	d := gob.NewDecoder(r)
 
 	// decode propMap
@@ -324,7 +326,6 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree.propMap = make(propMap)
 	for sortOrder, item := range props {
 		item.sortOrder = uint16(sortOrder)
 		tree.propMap[*item.Str] = item
@@ -337,7 +338,6 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree.typeMap = make(typeMap)
 	for _, t := range types {
 		tree.typeMap[*t.Str] = t
 	}
