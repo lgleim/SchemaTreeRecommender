@@ -57,7 +57,7 @@ func twoPass(fileName string, firstN uint64) *SchemaTree {
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	fileName := flag.String("file", "10M.nt.gz", "the file to parse")
+	fileName := flag.String("file", "experiments/10M.nt.gz", "the file to parse")
 	firstNsubjects := flag.Int64("n", 0, "Only parse the first n subjects") // TODO: handle negative inputs
 	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
@@ -110,7 +110,7 @@ func main() {
 
 		PrintMemUsage()
 
-		schema.Save("schemaTree.bin")
+		schema.Save(*fileName + ".schemaTree.bin")
 
 	}
 

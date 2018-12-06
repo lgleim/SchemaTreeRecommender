@@ -126,24 +126,41 @@ func (node *schemaNode) incrementSupport() {
 	atomic.AddUint32(&node.Support, 1)
 }
 
-// TODO improve thread safeness
+/// structures & logic for handling types annotations in schemaNodes
+var typeChan chan struct {
+	node  *schemaNode
+	types []*iType
+}
+
 func (node *schemaNode) insertTypes(types []*iType) {
-	// update typ "counts" at tail
-	if len(types) > 0 {
-		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
-		if node.Types == nil {
-			node.Types = make(map[*iType]uint32)
+	typeChan <- struct {
+		node  *schemaNode
+		types []*iType
+	}{node, types}
+}
+
+func typeInsertionWorker() {
+	for ts := range typeChan {
+		// update typ "counts" at tail
+		if len(ts.types) > 0 {
+			m := ts.node.Types
+			if m == nil {
+				ts.node.Types = make(map[*iType]uint32)
+				m = ts.node.Types
+			}
+			for _, t := range ts.types {
+				m[t]++
+			}
 		}
-		for _, t := range types {
-			node.Types[t]++
-		}
-		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 	}
 }
 
 // thread-safe!
 const lockPrime = 97 // arbitrary prime number
-var globalNodeLocks [lockPrime]sync.RWMutex
+var globalNodeLocks [lockPrime]*sync.RWMutex
+
+// const workerCount = 97 //arbitrary prime number, e.g. 43, 97
+// var workers [workerCount]chan *uint32
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	//// hash map based
@@ -156,6 +173,7 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	// }
 	// return child
 
+	// uintptr(unsafe.Pointer(node))%workerConcurrency
 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 	// binary search for the child
 	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })

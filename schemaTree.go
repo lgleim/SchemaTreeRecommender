@@ -5,20 +5,18 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"sync"
 	"time"
 	"unsafe"
 
 	gzip "github.com/klauspost/pgzip"
 )
 
-const workerConcurrency = 13
-
 type SchemaTree struct {
 	propMap propMap
 	typeMap typeMap
 	Root    schemaNode
 	MinSup  uint32
-	adders  [workerConcurrency]chan *uint32
 }
 
 // NewSchemaTree returns a newly allocated and initialized schema tree
@@ -35,25 +33,42 @@ func NewSchemaTree() (tree *SchemaTree) {
 
 // Init initializes the datastructure for usage
 func (tree *SchemaTree) init() {
-	// initialize support counter workers
-	// supportCounter := func(ptrs chan *uint32) {
-	// 	for p := range ptrs {
-	// 		(*p)++
+	for i := range globalNodeLocks {
+		globalNodeLocks[i] = &sync.RWMutex{}
+	}
+
+	supportCounter := func(ptrs chan *uint32) {
+		for p := range ptrs {
+			(*p)++
+		}
+	}
+	// // initialize support counter workers
+	// for i := range workers {
+	// 	if workers[i] == nil {
+	// 		workers[i] = make(chan *uint32) // TODO: buffering likely break transactional consistency of schema tree
+	// 		go supportCounter(workers[i])   // dispatch worker coroutine
 	// 	}
 	// }
 
-	// for i := range tree.adders {
-	// 	if tree.adders[i] == nil {
-	// 		tree.adders[i] = make(chan *uint32) // TODO: buffering likely break transactional consistency of schema tree
-	// 		go supportCounter(tree.adders[i])   // dispatch worker coroutine
-	// 	}
-	// }
+	if typeChan == nil {
+		typeChan = make(chan struct {
+			node  *schemaNode
+			types []*iType
+		})
+		go typeInsertionWorker()
+	}
 }
 
 func (tree *SchemaTree) destroy() {
+	if typeChan != nil {
+		close(typeChan)
+	}
+
 	// // destroy support counter workers
-	// for _, adder := range tree.adders {
-	// 	close(adder)
+	// for _, wrkr := range workers {
+	// 	if wrkr != nil {
+	// 		close(wrkr)
+	// 	}
 	// }
 }
 
@@ -75,7 +90,7 @@ func (tree *SchemaTree) Insert(s *subjectSummary, updateSupport bool) {
 		// 	item.increment()
 		// }
 		for _, item := range properties {
-			item.increment()
+			item.increment() // per item thread sync
 		}
 	}
 

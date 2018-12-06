@@ -105,7 +105,7 @@ func subjectSummaryReader(
 
 	// set up handler routines
 	concurrency := 4 * runtime.NumCPU()
-	summaries := make(chan *subjectSummary, 1000)
+	summaries := make(chan *subjectSummary)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {

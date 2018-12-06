@@ -65,19 +65,19 @@ type propMap map[string]*iItem
 var propMapLock sync.Mutex
 
 // thread-safe
-func (m *propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
-	item, ok := (*m)[iri]
+func (m propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
+	item, ok := m[iri]
 	if !ok {
 		propMapLock.Lock()
 		defer propMapLock.Unlock()
 
 		// recheck existence - might have been created by other thread
-		if item, ok = (*m)[iri]; ok {
+		if item, ok = m[iri]; ok {
 			return
 		}
 
-		item = &iItem{&iri, 0, uint16(len(*m)), nil}
-		(*m)[iri] = item
+		item = &iItem{&iri, 0, uint16(len(m)), nil}
+		m[iri] = item
 	}
 	return
 }
@@ -88,23 +88,27 @@ type iList []*iItem
 // sort the list according to the current iList sort order
 func (l *iList) sort() {
 	// sort the properties according to the current iList sort order
-	sort.Slice(*l, func(i, j int) bool { return (*l)[i].sortOrder < (*l)[j].sortOrder })
+	ls := *l
+	sort.Slice(ls, func(i, j int) bool { return ls[i].sortOrder < ls[j].sortOrder })
 }
 
 // inplace sorting and deduplication.
 func (l *iList) sortAndDeduplicate() {
-	l.sort()
+	ls := *l
+
+	// ls.sort()
+	sort.Slice(ls, func(i, j int) bool { return ls[i].sortOrder < ls[j].sortOrder })
 
 	// inplace deduplication
 	j := 0
-	for i := 1; i < len(*l); i++ {
-		if (*l)[j] == (*l)[i] {
+	for i := 1; i < len(ls); i++ {
+		if ls[j] == ls[i] {
 			continue
 		}
 		j++
-		(*l)[i], (*l)[j] = (*l)[j], (*l)[i]
+		ls[i], ls[j] = ls[j], ls[i]
 	}
-	*l = (*l)[:j+1]
+	*l = ls[:j+1]
 }
 
 func (l *iList) toSet() map[*iItem]bool {
