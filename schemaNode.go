@@ -235,10 +235,10 @@ func (node *schemaNode) graphViz(minSup uint32) string {
 		s += fmt.Sprintf("%v -> %v  [color=blue];\n", node, node.nextSameID)
 	}
 
-	// draw types
-	for k, v := range node.Types {
-		s += fmt.Sprintf("%v -> \"%v\" [color=red,label=%v];\n", node, *k.Str, v)
-	}
+	// // draw types
+	// for k, v := range node.Types {
+	// 	s += fmt.Sprintf("%v -> \"%v\" [color=red,label=%v];\n", node, *k.Str, v)
+	// }
 
 	// draw children
 	for _, child := range node.Children {

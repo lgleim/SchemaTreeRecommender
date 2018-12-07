@@ -68,7 +68,7 @@ func (tree *SchemaTree) destroy() {
 
 func (tree SchemaTree) String() string {
 	s := "digraph schematree {\n"
-	s += tree.Root.graphViz(tree.MinSup)
+	s += tree.Root.graphViz(10000) //tree.MinSup
 	return s + "}"
 }
 

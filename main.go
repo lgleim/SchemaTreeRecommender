@@ -63,6 +63,7 @@ func main() {
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
 	traceFile := flag.String("trace", "", "write execution trace to `file`")
 	loadBinary := flag.String("load", "", "read stored schematree from `file`")
+	visualize := flag.Bool("viz", false, "output a GraphViz visualization of the tree to `tree.png`")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -103,21 +104,24 @@ func main() {
 	} else {
 		schema = twoPass(*fileName, uint64(*firstNsubjects))
 
-		// r := &renderer.PNGRenderer{
-		// 	OutputFile: "my_graph.png",
-		// }
-		// r.Render(fmt.Sprint(schema))
-
 		PrintMemUsage()
 
 		schema.Save(*fileName + ".schemaTree.bin")
+	}
 
+	if *visualize {
+		f, err := os.Create("tree.dot")
+		if err == nil {
+			defer f.Close()
+			f.WriteString(fmt.Sprint(schema))
+			fmt.Println("Run e.g. `dot -Tsvg tree.dot -o tree.svg` to visualize!")
+		}
 	}
 
 	rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 	memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
 	list := []*iItem{rdftype, memberOf}
-	fmt.Println(schema.Support(list), schema.Root.Support)
+	// fmt.Println(schema.Support(list), schema.Root.Support)
 
 	t1 = time.Now()
 	rec := schema.recommendProperty(list)
