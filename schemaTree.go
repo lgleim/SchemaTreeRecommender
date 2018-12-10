@@ -33,8 +33,8 @@ func NewSchemaTree() (tree *SchemaTree) {
 
 // Init initializes the datastructure for usage
 func (tree *SchemaTree) init() {
-	for i := range globalNodeLocks {
-		globalNodeLocks[i] = &sync.RWMutex{}
+	for i := range globalItemLocks {
+		globalItemLocks[i] = &sync.Mutex{}
 	}
 	// // initialize support counter workers
 	// for i := range workers {

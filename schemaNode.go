@@ -157,7 +157,7 @@ func typeInsertionWorker() {
 
 // thread-safe!
 const lockPrime = 97 // arbitrary prime number
-var globalNodeLocks [lockPrime]*sync.RWMutex
+var globalItemLocks [lockPrime]*sync.Mutex
 
 // const workerCount = 97 //arbitrary prime number, e.g. 43, 97
 // var workers [workerCount]chan *uint32
@@ -173,24 +173,22 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	// }
 	// return child
 
-	// uintptr(unsafe.Pointer(node))%workerConcurrency
-	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 	// binary search for the child
+	// NOTE: Dirty reads are acceptable!!! If search misses due to dirty writes, the correct result will still be determined in the synchronized section
 	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
-	if i < len(node.Children) && node.Children[i].ID == term {
-		defer globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
-		return node.Children[i]
+	if i < len(node.Children) {
+		if child := node.Children[i]; child.ID == term { // MUST be in a temporary variable, since i-th element might change concurrently
+			return child
+		}
 	}
 
-	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
+	// We have to add the child, aquire a lock for this term
+	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
 
-	// We have to add the child, aquire a write lock
-	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
-
-	// search again, since child might meanwhile have been added by other thread
+	// search again, since child might meanwhile have been added by other thread or previous search might have missed
 	i = sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
 	if i < len(node.Children) && node.Children[i].ID == term {
-		defer globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
+		defer globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
 		return node.Children[i]
 	}
 
@@ -204,7 +202,7 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	copy(node.Children[i+1:], node.Children[i:])
 	node.Children[i] = newChild
 
-	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
+	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
 
 	return newChild
 }
