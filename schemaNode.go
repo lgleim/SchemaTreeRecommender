@@ -175,9 +175,10 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 
 	// binary search for the child
 	// NOTE: Dirty reads are acceptable!!! If search misses due to dirty writes, the correct result will still be determined in the synchronized section
-	i := sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
-	if i < len(node.Children) {
-		if child := node.Children[i]; child.ID == term { // MUST be in a temporary variable, since i-th element might change concurrently
+	children := node.Children
+	i := sort.Search(len(children), func(i int) bool { return uintptr(unsafe.Pointer(children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
+	if i < len(children) {
+		if child := children[i]; child.ID == term { // MUST be in a temporary variable, since i-th element might change concurrently
 			return child
 		}
 	}
@@ -186,10 +187,11 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
 
 	// search again, since child might meanwhile have been added by other thread or previous search might have missed
-	i = sort.Search(len(node.Children), func(i int) bool { return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
-	if i < len(node.Children) && node.Children[i].ID == term {
+	children = node.Children
+	i = sort.Search(len(children), func(i int) bool { return uintptr(unsafe.Pointer(children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
+	if i < len(children) && children[i].ID == term {
 		defer globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
-		return node.Children[i]
+		return children[i]
 	}
 
 	// child not found, but i is the index where it would be inserted.
