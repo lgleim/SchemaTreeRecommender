@@ -102,6 +102,7 @@ func subjectSummaryReader(
 	}
 
 	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	// set up handler routines
 	concurrency := 4 * runtime.NumCPU()
