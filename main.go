@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/gob"
 	"flag"
 	"fmt"
 	"log"
@@ -11,47 +12,77 @@ import (
 	"time"
 )
 
-func twoPass(fileName string, firstN uint64) *SchemaTree {
-	// first pass: collect I-List and statistics
-	t1 := time.Now()
-
-	var schema *SchemaTree
-
+// first pass: collect I-List and statistics
+func (schema *SchemaTree) firstPass(fileName string, firstN uint64) {
 	if _, err := os.Stat(fileName + ".firstPass.bin"); os.IsNotExist(err) {
-		// preprocess
 		counter := func(s *subjectSummary) {
 			for _, prop := range s.properties {
 				prop.increment()
 			}
 		}
-		schema = NewSchemaTree()
+
+		t1 := time.Now()
 		subjectSummaryReader(fileName, schema.propMap, schema.typeMap, counter, firstN)
+
+		fmt.Printf("%v properties, %v types\n", len(schema.propMap), len(schema.typeMap))
+
+		f, _ := os.Create(fileName + ".propMap")
+		gob.NewEncoder(f).Encode(schema.propMap)
+		f.Close()
+		f, _ = os.Create(fileName + ".typeMap")
+		gob.NewEncoder(f).Encode(schema.typeMap)
+		f.Close()
+
+		schema.updateSortOrder()
 
 		fmt.Println("First Pass:", time.Since(t1))
 		PrintMemUsage()
-		schema.Save(fileName + ".firstPass.bin")
+
+		err = schema.Save(fileName + ".firstPass.bin")
+		if err != nil {
+			log.Fatalln(err)
+		}
 	} else {
+		// f1, err1 := os.Open(fileName + ".propMap")
+		// f2, err2 := os.Open(fileName + ".typeMap")
+
+		// if err1 == nil && err2 == nil {
+		// 	fmt.Print("Loading type- and propertyMap directly from corresponding gobs: ")
+		// 	tmp := NewSchemaTree()
+		// 	gob.NewDecoder(f1).Decode(&tmp.propMap)
+		// 	gob.NewDecoder(f2).Decode(&tmp.typeMap)
+		// 	tmp.updateSortOrder()
+		// 	*schema = *tmp
+		// 	fmt.Printf("%v properties, %v types\n", len(tmp.propMap), len(tmp.typeMap))
+		// } else {
 		tmp, err := LoadSchemaTree(fileName + ".firstPass.bin")
 		if err != nil {
 			log.Fatalln(err)
 		}
-		schema = tmp
+		*schema = *tmp
+		// }
 	}
+}
 
-	// second pass
-	t1 = time.Now()
-
-	schema.updateSortOrder()
+// build schema tree
+func (schema *SchemaTree) secondPass(fileName string, firstN uint64) {
+	schema.updateSortOrder() // duplicate -- legacy compatability
 
 	inserter := func(s *subjectSummary) {
 		schema.Insert(s, false)
 	}
+
+	t1 := time.Now()
 	subjectSummaryReader(fileName, schema.propMap, schema.typeMap, inserter, firstN)
 
 	fmt.Println("Second Pass:", time.Since(t1))
 	PrintMemUsage()
+	// PrintLockStats()
+}
 
-	return schema
+func (schema *SchemaTree) twoPass(fileName string, firstN uint64) {
+	schema.firstPass(fileName, firstN)
+	schema.secondPass(fileName, firstN)
 }
 
 func main() {
@@ -92,7 +123,7 @@ func main() {
 		defer trace.Stop()
 	}
 
-	t1 := time.Now()
+	// t1 := time.Now()
 	var schema *SchemaTree
 
 	if *loadBinary != "" {
@@ -102,7 +133,8 @@ func main() {
 			fmt.Println(err)
 		}
 	} else {
-		schema = twoPass(*fileName, uint64(*firstNsubjects))
+		schema = NewSchemaTree()
+		schema.twoPass(*fileName, uint64(*firstNsubjects))
 
 		PrintMemUsage()
 
@@ -118,17 +150,17 @@ func main() {
 		}
 	}
 
-	rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-	memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
-	list := []*iItem{rdftype, memberOf}
-	// fmt.Println(schema.Support(list), schema.Root.Support)
+	// rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
+	// // memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
+	// list := []*iItem{rdftype} //, memberOf}
+	// // fmt.Println(schema.Support(list), schema.Root.Support)
 
-	t1 = time.Now()
-	rec := schema.recommendProperty(list)
-	fmt.Println(rec[:10])
-	fmt.Println(time.Since(t1))
+	// t1 = time.Now()
+	// rec := schema.recommendProperty(list)
+	// fmt.Println(rec[:10])
+	// fmt.Println(time.Since(t1))
 
-	PrintMemUsage()
+	// PrintMemUsage()
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
