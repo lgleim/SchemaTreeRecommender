@@ -34,7 +34,8 @@ func NewSchemaTree() (tree *SchemaTree) {
 // Init initializes the datastructure for usage
 func (tree *SchemaTree) init() {
 	for i := range globalItemLocks {
-		globalItemLocks[i] = &sync.Mutex{}
+		globalItemLocks[i] = &sync.RWMutex{}
+		globalNodeLocks[i] = &sync.RWMutex{}
 	}
 	// // initialize support counter workers
 	// for i := range workers {
@@ -133,7 +134,7 @@ func (tree *SchemaTree) updateSortOrder() {
 	// update term's internal sortOrder
 	// Runtime: O(n), Memory: -
 	for i, v := range iList {
-		v.sortOrder = uint16(i)
+		v.sortOrder = uint32(i)
 	}
 }
 
@@ -269,7 +270,7 @@ func (tree *SchemaTree) Save(filePath string) error {
 	// encode propMap
 	props := make([]*iItem, len(tree.propMap), len(tree.propMap))
 	for _, p := range tree.propMap {
-		props[int(p.sortOrder)] = p
+		props[p.sortOrder] = p
 	}
 	err = e.Encode(props)
 	if err != nil {
@@ -336,7 +337,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 		return nil, err
 	}
 	for sortOrder, item := range props {
-		item.sortOrder = uint16(sortOrder)
+		item.sortOrder = uint32(sortOrder)
 		tree.propMap[*item.Str] = item
 	}
 	fmt.Printf("%v properties... ", len(props))

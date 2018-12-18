@@ -12,11 +12,11 @@ import (
 // - its support, i.e. its total number of occurrences (totalCount)
 type iType struct {
 	Str        *string
-	TotalCount uint32
+	TotalCount uint64
 }
 
 func (t *iType) increment() {
-	atomic.AddUint32(&t.TotalCount, 1)
+	atomic.AddUint64(&t.TotalCount, 1)
 }
 
 type typeMap map[string]*iType
@@ -47,13 +47,13 @@ func (m *typeMap) get(iri string) (item *iType) {
 // - an integer indicating sort order
 type iItem struct {
 	Str              *string
-	TotalCount       uint32
-	sortOrder        uint16
+	TotalCount       uint64
+	sortOrder        uint32
 	traversalPointer *schemaNode // node traversal pointer
 }
 
 func (p *iItem) increment() {
-	atomic.AddUint32(&p.TotalCount, 1)
+	atomic.AddUint64(&p.TotalCount, 1)
 }
 
 func (p iItem) String() string {
@@ -76,7 +76,7 @@ func (m propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mappi
 			return
 		}
 
-		item = &iItem{&iri, 0, uint16(len(m)), nil}
+		item = &iItem{&iri, 0, uint32(len(m)), nil}
 		m[iri] = item
 	}
 	return
