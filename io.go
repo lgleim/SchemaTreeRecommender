@@ -86,6 +86,7 @@ func subjectSummaryReader(
 				if size, err := strconv.Atoi(decimals); err == nil {
 					// create and start progress bar
 					bar := pb.New(size).SetUnits(pb.U_BYTES).SetRefreshRate(500 * time.Millisecond).Start()
+					bar.ShowElapsedTime = true
 					reader = bar.NewProxyReader(reader)
 					defer bar.Finish()
 				}

@@ -81,6 +81,12 @@ func (schema *SchemaTree) secondPass(fileName string, firstN uint64) {
 }
 
 func (schema *SchemaTree) twoPass(fileName string, firstN uint64) {
+	go func() {
+		for true {
+			time.Sleep(10 * time.Second)
+			PrintMemUsage()
+		}
+	}()
 	schema.firstPass(fileName, firstN)
 	schema.secondPass(fileName, firstN)
 }
