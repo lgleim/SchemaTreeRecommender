@@ -101,8 +101,7 @@ func subjectSummaryReader(
 		}
 	}
 
-	scanner := bufio.NewScanner(reader)
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
 
 	// set up handler routines
 	concurrency := 4 * runtime.NumCPU()
@@ -119,6 +118,8 @@ func subjectSummaryReader(
 	}
 
 	// parse file
+	var isPrefix, skip bool
+	var err error
 	var line, token []byte
 	var lastSubj string
 	var bytesProcessed int
@@ -126,8 +127,16 @@ func subjectSummaryReader(
 	rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 	summary := &subjectSummary{[]*iType{}, []*iItem{}}
 
-	for scanner.Scan() {
-		line = scanner.Bytes()
+	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
+		if isPrefix {
+			fmt.Printf("Line Buffer too small!!! Line prefix: %v\n", string(line[:200]))
+			skip = true
+			continue
+		}
+		if skip { // !isPrefix follows implicitly
+			skip = false
+			continue
+		}
 
 		// process subject
 		bytesProcessed, token = firstWord(line)
@@ -167,7 +176,7 @@ func subjectSummaryReader(
 		}
 	}
 
-	if err := scanner.Err(); err != nil {
+	if err != nil && err != io.EOF {
 		log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
 	}
 	close(summaries)
