@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/gob"
 	"fmt"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"unsafe"
@@ -12,10 +11,10 @@ import (
 // Nodes of the Schema FP-Tree
 // TODO: determine wether to use hash-maps or arrays to store child notes in the tree
 type schemaNode struct {
-	ID     *iItem
-	parent *schemaNode
-	// Children   map[*iItem]*schemaNode
-	Children   []*schemaNode
+	ID       *iItem
+	parent   *schemaNode
+	Children map[*iItem]*schemaNode
+	// Children   []*schemaNode
 	nextSameID *schemaNode       // node traversal pointer
 	Support    uint32            // total frequency of the node in the path
 	Types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
@@ -23,8 +22,8 @@ type schemaNode struct {
 
 func newRootNode() schemaNode {
 	root := "root"
-	// return schemaNode{&iItem{&root, 0, 0, nil}, nil, make(map[*iItem]*schemaNode), nil, 0, nil}
-	return schemaNode{&iItem{&root, 0, 0, nil}, nil, []*schemaNode{}, nil, 0, nil}
+	return schemaNode{&iItem{&root, 0, 0, nil}, nil, make(map[*iItem]*schemaNode), nil, 0, nil}
+	// return schemaNode{&iItem{&root, 0, 0, nil}, nil, []*schemaNode{}, nil, 0, nil}
 }
 
 func (node *schemaNode) writeGob(e *gob.Encoder) error {
@@ -63,47 +62,51 @@ func (node *schemaNode) writeGob(e *gob.Encoder) error {
 
 func (node *schemaNode) decodeGob(d *gob.Decoder, props []*iItem, tMap map[uintptr]*iType) error {
 	// function scoping to allow for garbage collection
-	err := func() error {
-		// ID
-		var id uint16
-		err := d.Decode(&id)
-		if err != nil {
-			return err
-		}
-		node.ID = props[int(id)]
-
-		// traversal pointer repopulation
-		node.nextSameID = node.ID.traversalPointer
-		node.ID.traversalPointer = node
-
-		// Support
-		err = d.Decode(&node.Support)
-		if err != nil {
-			return err
-		}
-
-		// Children
-		var length int
-		err = d.Decode(&length)
-		if err != nil {
-			return err
-		}
-		node.Children = make([]*schemaNode, length, length)
-
-		return nil
-	}()
-	for i := range node.Children {
-		node.Children[i] = &schemaNode{nil, node, nil, nil, 0, nil}
-		err = node.Children[i].decodeGob(d, props, tMap)
-		if err != nil {
-			return err
-		}
-		// node.Children[i].parent = node
+	// err := func() error {
+	// ID
+	var id uint16
+	err := d.Decode(&id)
+	if err != nil {
+		return err
 	}
-	// fixing sort order of schemaNode.children arrays (sorted by *changed* pointer addresses)
-	sort.Slice(node.Children, func(i, j int) bool {
-		return uintptr(unsafe.Pointer(node.Children[i].ID)) < uintptr(unsafe.Pointer(node.Children[j].ID))
-	})
+	node.ID = props[int(id)]
+
+	// traversal pointer repopulation
+	node.nextSameID = node.ID.traversalPointer
+	node.ID.traversalPointer = node
+
+	// Support
+	err = d.Decode(&node.Support)
+	if err != nil {
+		return err
+	}
+
+	// Children
+	var length int
+	err = d.Decode(&length)
+	if err != nil {
+		return err
+	}
+	// node.Children = make([]*schemaNode, length, length)
+	node.Children = make(map[*iItem]*schemaNode)
+
+	// 	return nil
+	// }()
+	// for i := range node.Children {
+	// 	node.Children[i] = &schemaNode{nil, node, nil, nil, 0, nil}
+	// 	err = node.Children[i].decodeGob(d, props, tMap)
+	for i := 0; i < length; i++ {
+		child := &schemaNode{nil, node, nil, nil, 0, nil}
+		err = child.decodeGob(d, props, tMap)
+		if err != nil {
+			return err
+		}
+		node.Children[child.ID] = child
+	}
+	// // fixing sort order of schemaNode.children arrays (sorted by *changed* pointer addresses)
+	// sort.Slice(node.Children, func(i, j int) bool {
+	// 	return uintptr(unsafe.Pointer(node.Children[i].ID)) < uintptr(unsafe.Pointer(node.Children[j].ID))
+	// })
 
 	// Types
 	var types map[uintptr]uint32
@@ -157,58 +160,84 @@ func typeInsertionWorker() {
 
 // thread-safe!
 const lockPrime = 97 // arbitrary prime number
-var globalItemLocks [lockPrime]*sync.Mutex
-
-// const workerCount = 97 //arbitrary prime number, e.g. 43, 97
-// var workers [workerCount]chan *uint32
+var globalItemLocks [lockPrime]*sync.RWMutex
+var globalNodeLocks [lockPrime]*sync.RWMutex
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
-	//// hash map based
-	// child, ok := node.children[term]
-	// if !ok {
-	// 	// child not found. create new one:
-	// 	child = &schemaNode{term, node, make(map[*iItem]*schemaNode), term.traversalPointer, 0, nil}
-	// 	term.traversalPointer = child
-	// 	node.children[term] = child
-	// }
-	// return child
+	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
+	child, ok := node.Children[term]
+	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
 
-	// binary search for the child
-	// NOTE: Dirty reads are acceptable!!! If search misses due to dirty writes, the correct result will still be determined in the synchronized section
-	children := node.Children
-	i := sort.Search(len(children), func(i int) bool { return uintptr(unsafe.Pointer(children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
-	if i < len(children) {
-		if child := children[i]; child.ID == term { // MUST be in a temporary variable, since i-th element might change concurrently
+	if !ok { // child does not exist, yet
+		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
+
+		// search again, since child might meanwhile have been added by other thread
+		child, ok = node.Children[term]
+		if ok {
+			globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 			return child
 		}
+
+		// child not found. Create a new one...
+		globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
+		child = &schemaNode{term, node, make(map[*iItem]*schemaNode), term.traversalPointer, 0, nil}
+		term.traversalPointer = child
+		globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
+
+		node.Children[term] = child
+
+		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 	}
+	return child
 
-	// We have to add the child, aquire a lock for this term
-	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
+	// // binary search for the child
+	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
+	// children := node.Children
+	// i := sort.Search(
+	// 	len(children),
+	// 	func(i int) bool {
+	// 		return uintptr(unsafe.Pointer(children[i].ID)) >= uintptr(unsafe.Pointer(term))
+	// 	})
 
-	// search again, since child might meanwhile have been added by other thread or previous search might have missed
-	children = node.Children
-	i = sort.Search(len(children), func(i int) bool { return uintptr(unsafe.Pointer(children[i].ID)) >= uintptr(unsafe.Pointer(term)) })
-	if i < len(children) && children[i].ID == term {
-		defer globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
-		return children[i]
-	}
+	// if i < len(children) {
+	// 	if child := children[i]; child.ID == term {
+	// 		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
+	// 		return child
+	// 	}
+	// }
+	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
 
-	// child not found, but i is the index where it would be inserted.
-	// create a new one...
-	newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
-	term.traversalPointer = newChild
+	// // We have to add the child, aquire a lock for this term
+	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
 
-	// ...and insert it at position i
-	children = append(children, nil)
-	copy(children[i+1:], children[i:])
-	children[i] = newChild
+	// // search again, since child might meanwhile have been added by other thread or previous search might have missed
+	// i = sort.Search(
+	// 	len(node.Children),
+	// 	func(i int) bool {
+	// 		return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term))
+	// 	})
+	// if i < len(node.Children) && node.Children[i].ID == term {
+	// 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
+	// 	return node.Children[i]
+	// }
 
-	node.Children = children
+	// // child not found, but i is the index where it would be inserted.
+	// // create a new one...
+	// globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
+	// newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
+	// term.traversalPointer = newChild
+	// globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
 
-	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
+	// // ...and insert it at position i
+	// node.Children = append(node.Children, nil)
+	// copy(node.Children[i+1:], node.Children[i:])
+	// node.Children[i] = newChild
 
-	return newChild
+	// node.Children = node.Children
+
+	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
+
+	// return newChild
 }
 
 // internal! propertyPath *MUST* be sorted in sortOrder (i.e. descending support)
