@@ -176,8 +176,11 @@ func (tree *SchemaTree) recommendProperty(properties iList) propertyRecommendati
 		}
 	}
 
-	// walk from each leaf towards root...l
-	for leaf := properties[len(properties)-1].traversalPointer; leaf != nil; leaf = leaf.nextSameID { // iterate all instances for that property
+	// the least frequent property from the list is farthest from the root
+	rarestProperty := properties[len(properties)-1]
+
+	// walk from each "leaf" instance of that property towards the root...
+	for leaf := rarestProperty.traversalPointer; leaf != nil; leaf = leaf.nextSameID { // iterate all instances for that property
 		if leaf.prefixContains(properties) {
 			setSupport += uint64(leaf.Support) // number of occuences of this set of properties in the current branch
 
@@ -195,9 +198,12 @@ func (tree *SchemaTree) recommendProperty(properties iList) propertyRecommendati
 	// TODO: If there are no candidates, consider doing (n-1)-gram smoothing over property subsets
 
 	// now that all candidates have been collected, rank them
-	ranked := make([]rankedPropertyCandidate, 0, len(candidates))
+	i := 0
+	setSup := float64(setSupport)
+	ranked := make([]rankedPropertyCandidate, len(candidates), len(candidates))
 	for candidate, support := range candidates {
-		ranked = append(ranked, rankedPropertyCandidate{candidate, float64(support) / float64(setSupport)})
+		ranked[i] = rankedPropertyCandidate{candidate, float64(support) / setSup}
+		i++
 	}
 
 	// sort descending by support
