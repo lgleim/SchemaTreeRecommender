@@ -138,6 +138,7 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
+		serve(schema)
 	} else {
 		schema = NewSchemaTree()
 		schema.twoPass(*fileName, uint64(*firstNsubjects))
@@ -155,18 +156,6 @@ func main() {
 			fmt.Println("Run e.g. `dot -Tsvg tree.dot -o tree.svg` to visualize!")
 		}
 	}
-
-	// rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-	// // memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
-	// list := []*iItem{rdftype} //, memberOf}
-	// // fmt.Println(schema.Support(list), schema.Root.Support)
-
-	// t1 = time.Now()
-	// rec := schema.recommendProperty(list)
-	// fmt.Println(rec[:10])
-	// fmt.Println(time.Since(t1))
-
-	// PrintMemUsage()
 
 	if *memprofile != "" {
 		f, err := os.Create(*memprofile)
