@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"runtime"
+	"time"
+	"unsafe"
 )
 
 // PrintMemUsage outputs the current, total and OS memory being used. As well as the number
@@ -20,7 +22,6 @@ func PrintMemUsage() {
 func bToMb(b uint64) float64 {
 	return float64(b) / 1024 / 1024
 }
-
 
 func countTreeNodes(schema *SchemaTree) {
 	var nodeCount uint64
@@ -45,4 +46,4 @@ func countTreeNodes(schema *SchemaTree) {
 		globalNodeLocks[uintptr(unsafe.Pointer(&schema.Root))%lockPrime].RUnlock()
 		fmt.Printf("\nNodeCount: %v\n\n", nodeCount)
 	}
-}()
+}

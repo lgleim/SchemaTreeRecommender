@@ -7,8 +7,11 @@ import (
 	"time"
 )
 
-func serve(schema *SchemaTree) {
+func serve(schema *SchemaTree, port int) {
 	dashboard := func(w http.ResponseWriter, r *http.Request) {
+		var properties []string
+		json.NewDecoder(r.Body).Decode(&properties)
+
 		rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 		memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
 		list := []*iItem{rdftype, memberOf}
@@ -27,6 +30,6 @@ func serve(schema *SchemaTree) {
 	}
 
 	http.HandleFunc("/recommender", dashboard)
-	fmt.Printf("Now listening on port %v\n", 8080)
-	http.ListenAndServe(":8080", nil)
+	go http.ListenAndServe(fmt.Sprintf(":%v", port), nil)
+	fmt.Printf("Now listening on port %v\n", port)
 }

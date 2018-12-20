@@ -103,6 +103,8 @@ func main() {
 	traceFile := flag.String("trace", "", "write execution trace to `file`")
 	loadBinary := flag.String("load", "", "read stored schematree from `file`")
 	visualize := flag.Bool("viz", false, "output a GraphViz visualization of the tree to `tree.png`")
+	serveRest := flag.Bool("api", false, "specifying this flag enables the rest api")
+	serveOnPort := flag.Int("port", 8080, "the port the rest interface will be served on. Use in conjunction with -api")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -140,7 +142,6 @@ func main() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		serve(schema)
 	} else {
 		schema = NewSchemaTree()
 		schema.twoPass(*fileName, uint64(*firstNsubjects))
@@ -157,6 +158,10 @@ func main() {
 			f.WriteString(fmt.Sprint(schema))
 			fmt.Println("Run e.g. `dot -Tsvg tree.dot -o tree.svg` to visualize!")
 		}
+	}
+
+	if *serveRest {
+		serve(schema, *serveOnPort)
 	}
 
 	if *memprofile != "" {
