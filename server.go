@@ -10,7 +10,12 @@ import (
 func serve(schema *SchemaTree, port int) {
 	dashboard := func(w http.ResponseWriter, r *http.Request) {
 		var properties []string
-		json.NewDecoder(r.Body).Decode(&properties)
+		err := json.NewDecoder(r.Body).Decode(&properties)
+		if err != nil {
+			// w.Write([]byte("Malformed Request"))
+			panic("Malformed Request")
+		}
+		fmt.Println(properties)
 
 		rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 		memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
