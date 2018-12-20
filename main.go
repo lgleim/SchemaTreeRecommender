@@ -72,6 +72,8 @@ func (schema *SchemaTree) secondPass(fileName string, firstN uint64) {
 		schema.Insert(s, false)
 	}
 
+	go countTreeNodes(schema)
+
 	t1 := time.Now()
 	subjectSummaryReader(fileName, schema.propMap, schema.typeMap, inserter, firstN)
 
