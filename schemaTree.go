@@ -21,10 +21,11 @@ type SchemaTree struct {
 
 // NewSchemaTree returns a newly allocated and initialized schema tree
 func NewSchemaTree() (tree *SchemaTree) {
+	pMap := make(propMap)
 	tree = &SchemaTree{
-		propMap: make(propMap),
+		propMap: pMap,
 		typeMap: make(typeMap),
-		Root:    newRootNode(),
+		Root:    newRootNode(pMap),
 		MinSup:  3,
 	}
 	tree.init()
@@ -34,7 +35,7 @@ func NewSchemaTree() (tree *SchemaTree) {
 // Init initializes the datastructure for usage
 func (tree *SchemaTree) init() {
 	for i := range globalItemLocks {
-		globalItemLocks[i] = &sync.RWMutex{}
+		globalItemLocks[i] = &sync.Mutex{}
 		globalNodeLocks[i] = &sync.RWMutex{}
 	}
 	// // initialize support counter workers
@@ -68,26 +69,38 @@ func (tree *SchemaTree) destroy() {
 }
 
 func (tree SchemaTree) String() string {
-	s := "digraph schematree {\n"
-	s += tree.Root.graphViz(10000) //tree.MinSup
+	var minSupport uint32 = 100000
+	s := "digraph schematree { newrank=true; labelloc=b; color=blue; fontcolor=blue; style=dotted;\n"
+
+	s += tree.Root.graphViz(minSupport)
+
+	cluster := ""
+
+	for _, prop := range tree.propMap {
+		cluster = ""
+		for node := prop.traversalPointer; node != nil; node = node.nextSameID {
+			if node.Support >= minSupport {
+				cluster += fmt.Sprintf("\"%p\"; ", node)
+			}
+		}
+		if cluster != "" {
+			s += fmt.Sprintf("subgraph \"cluster_%v\" { rank=same; label=\"%v\"; %v}\n", prop.Str, *prop.Str, cluster)
+		}
+	}
+
+	s += "\n"
+
 	return s + "}"
 }
 
 // thread-safe
-func (tree *SchemaTree) Insert(s *subjectSummary, updateSupport bool) {
+func (tree *SchemaTree) Insert(s *subjectSummary) {
 	properties := s.properties
 
 	// sort the properties according to the current iList sort order & deduplicate
 	properties.sortAndDeduplicate()
 
-	if updateSupport {
-		// for _, item := range s.types {
-		// 	item.increment()
-		// }
-		for _, item := range properties {
-			item.increment() // per item thread sync
-		}
-	}
+	// fmt.Println(properties)
 
 	// insert sorted property-list into actual schemaTree
 	node := &tree.Root
@@ -115,7 +128,7 @@ func (tree *SchemaTree) updateSortOrder() {
 	// Runtime: O(n), Memory: O(n)
 	iList := make(iList, len(tree.propMap))
 	i := 0
-	for _, v := range tree.propMap { // ignore key iri!
+	for _, v := range tree.propMap {
 		iList[i] = v
 		i++
 	}
@@ -125,10 +138,10 @@ func (tree *SchemaTree) updateSortOrder() {
 	sort.Slice(
 		iList,
 		func(i, j int) bool {
-			if (*(iList[i])).TotalCount != (*(iList[j])).TotalCount {
-				return (*(iList[i])).TotalCount > (*(iList[j])).TotalCount
+			if iList[i].TotalCount != iList[j].TotalCount {
+				return iList[i].TotalCount > iList[j].TotalCount
 			}
-			return *((*(iList[i])).Str) < *((*(iList[j])).Str)
+			return *(iList[i].Str) < *(iList[j].Str)
 		})
 
 	// update term's internal sortOrder
@@ -158,58 +171,67 @@ func (tree *SchemaTree) Support(properties iList) uint32 {
 	return support
 }
 
-func (tree *SchemaTree) recommendProperty(properties iList) propertyRecommendations {
-	var setSupport uint64
-	//tree.root.support // empty set occured in all transactions
+func (tree *SchemaTree) recommendProperty(properties iList) (ranked propertyRecommendations) {
 
-	properties.sort() // descending by support
+	if len(properties) > 0 {
 
-	pSet := properties.toSet()
+		properties.sort() // descending by support
 
-	candidates := make(map[*iItem]uint32)
+		pSet := properties.toSet()
 
-	var makeCandidates func(startNode *schemaNode)
-	makeCandidates = func(startNode *schemaNode) { // head hunter function ;)
-		for _, child := range startNode.Children {
-			candidates[child.ID] += child.Support
-			makeCandidates(child)
-		}
-	}
+		candidates := make(map[*iItem]uint32)
 
-	// the least frequent property from the list is farthest from the root
-	rarestProperty := properties[len(properties)-1]
-
-	// walk from each "leaf" instance of that property towards the root...
-	for leaf := rarestProperty.traversalPointer; leaf != nil; leaf = leaf.nextSameID { // iterate all instances for that property
-		if leaf.prefixContains(properties) {
-			setSupport += uint64(leaf.Support) // number of occuences of this set of properties in the current branch
-
-			// walk up
-			for cur := leaf; cur.parent != nil; cur = cur.parent {
-				if !(pSet[cur.ID]) {
-					candidates[cur.ID] += leaf.Support
-				}
+		var makeCandidates func(startNode *schemaNode)
+		makeCandidates = func(startNode *schemaNode) { // head hunter function ;)
+			for _, child := range startNode.Children {
+				candidates[child.ID] += child.Support
+				makeCandidates(child)
 			}
-			// walk down
-			makeCandidates(leaf)
+		}
+
+		// the least frequent property from the list is farthest from the root
+		rarestProperty := properties[len(properties)-1]
+
+		var setSupport uint64
+		// walk from each "leaf" instance of that property towards the root...
+		for leaf := rarestProperty.traversalPointer; leaf != nil; leaf = leaf.nextSameID { // iterate all instances for that property
+			if leaf.prefixContains(properties) {
+				setSupport += uint64(leaf.Support) // number of occuences of this set of properties in the current branch
+
+				// walk up
+				for cur := leaf; cur.parent != nil; cur = cur.parent {
+					if !(pSet[cur.ID]) {
+						candidates[cur.ID] += leaf.Support
+					}
+				}
+				// walk down
+				makeCandidates(leaf)
+			}
+		}
+
+		// TODO: If there are no candidates, consider doing (n-1)-gram smoothing over property subsets
+
+		// now that all candidates have been collected, rank them
+		i := 0
+		setSup := float64(setSupport)
+		ranked = make([]rankedPropertyCandidate, len(candidates), len(candidates))
+		for candidate, support := range candidates {
+			ranked[i] = rankedPropertyCandidate{candidate, float64(support) / setSup}
+			i++
+		}
+
+		// sort descending by support
+		sort.Slice(ranked, func(i, j int) bool { return ranked[i].Probability > ranked[j].Probability })
+	} else {
+		fmt.Println(tree.Root.Support)
+		setSup := float64(tree.Root.Support) // empty set occured in all transactions
+		ranked = make([]rankedPropertyCandidate, len(tree.propMap), len(tree.propMap))
+		for _, prop := range tree.propMap {
+			ranked[prop.sortOrder] = rankedPropertyCandidate{prop, float64(prop.TotalCount) / setSup}
 		}
 	}
 
-	// TODO: If there are no candidates, consider doing (n-1)-gram smoothing over property subsets
-
-	// now that all candidates have been collected, rank them
-	i := 0
-	setSup := float64(setSupport)
-	ranked := make([]rankedPropertyCandidate, len(candidates), len(candidates))
-	for candidate, support := range candidates {
-		ranked[i] = rankedPropertyCandidate{candidate, float64(support) / setSup}
-		i++
-	}
-
-	// sort descending by support
-	sort.Slice(ranked, func(i, j int) bool { return ranked[i].Probability > ranked[j].Probability })
-
-	return ranked
+	return
 }
 
 // func (tree *schemaTree) recommendType(properties iList) typeRecommendations {
@@ -368,6 +390,12 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	// decode Root
 	fmt.Printf("decoding tree...")
 	err = tree.Root.decodeGob(d, props, types)
+
+	// legacy import bug workaround
+	if *tree.Root.ID.Str != "root" {
+		fmt.Println("WARNING!!! Encountered legacy root node import bug - root node counts will be incorrect!")
+		tree.Root.ID = tree.propMap.get("root")
+	}
 
 	if err != nil {
 		fmt.Printf("Encountered error while decoding the file: %v\n", err)

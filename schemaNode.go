@@ -21,10 +21,9 @@ type schemaNode struct {
 	Types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
 }
 
-func newRootNode() schemaNode {
-	root := "root"
-	// return schemaNode{&iItem{&root, 0, 0, nil}, nil, make(map[*iItem]*schemaNode), nil, 0, nil}
-	return schemaNode{&iItem{&root, 0, 0, nil}, nil, []*schemaNode{}, nil, 0, nil}
+func newRootNode(pMap propMap) schemaNode {
+	// return schemaNode{newRootiItem(), nil, make(map[*iItem]*schemaNode), nil, 0, nil}
+	return schemaNode{pMap.get("root"), nil, []*schemaNode{}, nil, 0, nil}
 }
 
 func (node *schemaNode) writeGob(e *gob.Encoder) error {
@@ -161,7 +160,7 @@ func typeInsertionWorker() {
 
 // thread-safe!
 const lockPrime = 97 // arbitrary prime number
-var globalItemLocks [lockPrime]*sync.RWMutex
+var globalItemLocks [lockPrime]*sync.Mutex
 var globalNodeLocks [lockPrime]*sync.RWMutex
 
 func (node *schemaNode) getChild(term *iItem) *schemaNode {
@@ -212,14 +211,17 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
 
 	// search again, since child might meanwhile have been added by other thread or previous search might have missed
+	children = node.Children
 	i = sort.Search(
-		len(node.Children),
+		len(children),
 		func(i int) bool {
-			return uintptr(unsafe.Pointer(node.Children[i].ID)) >= uintptr(unsafe.Pointer(term))
+			return uintptr(unsafe.Pointer(children[i].ID)) >= uintptr(unsafe.Pointer(term))
 		})
-	if i < len(node.Children) && node.Children[i].ID == term {
-		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
-		return node.Children[i]
+	if i < len(node.Children) {
+		if child := children[i]; child.ID == term {
+			globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
+			return child
+		}
 	}
 
 	// child not found, but i is the index where it would be inserted.
@@ -262,10 +264,10 @@ func (node *schemaNode) prefixContains(propertyPath iList) bool {
 
 func (node *schemaNode) graphViz(minSup uint32) string {
 	s := ""
-	// draw horizontal links
-	if node.nextSameID != nil && node.nextSameID.Support >= minSup {
-		s += fmt.Sprintf("%v -> %v  [color=blue];\n", node, node.nextSameID)
-	}
+	// // draw horizontal links
+	// if node.nextSameID != nil && node.nextSameID.Support >= minSup {
+	// 	s += fmt.Sprintf("%v -> %v  [color=blue];\n", node, node.nextSameID)
+	// }
 
 	// // draw types
 	// for k, v := range node.Types {
@@ -275,7 +277,7 @@ func (node *schemaNode) graphViz(minSup uint32) string {
 	// draw children
 	for _, child := range node.Children {
 		if child.Support >= minSup {
-			s += fmt.Sprintf("%v -> %v [label=%v,weight=%v]; ", node, child, child.Support, child.Support)
+			s += fmt.Sprintf("\"%p\" -> \"%p\" [label=%v;weight=%v];\n", node, child, child.Support, child.ID.TotalCount)
 			s += child.graphViz(minSup)
 		}
 	}
@@ -283,6 +285,6 @@ func (node *schemaNode) graphViz(minSup uint32) string {
 	return s
 }
 
-func (node *schemaNode) String() string {
-	return fmt.Sprintf("\"%v (%p)\"", *node.ID.Str, node)
-}
+// func (node *schemaNode) String() string {
+// 	return fmt.Sprintf("\"%v (%p id:%p str:%p)\"", *node.ID.Str, node, node.ID, node.ID.Str)
+// }
