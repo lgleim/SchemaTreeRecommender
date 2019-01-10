@@ -52,7 +52,7 @@ func subjectSummaryReader(
 	tMap typeMap,
 	handler func(s *subjectSummary),
 	firstN uint64,
-) {
+) (subjectCount uint64) {
 	// setting up IO
 	var reader io.Reader
 
@@ -124,7 +124,6 @@ func subjectSummaryReader(
 	var line, token []byte
 	var lastSubj string
 	var bytesProcessed int
-	var subjectCount uint64
 	rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 	summary := &subjectSummary{[]*iType{}, []*iItem{}}
 
@@ -143,7 +142,7 @@ func subjectSummaryReader(
 		bytesProcessed, token = firstWord(line)
 
 		// if r, _ := utf8.DecodeRune(token); r == '#' { // line is a comment
-		if token[0] == '#' { // line is a comment
+		if len(token) == 0 || token[0] == '#' { // line is a comment
 			continue
 		}
 
@@ -177,11 +176,18 @@ func subjectSummaryReader(
 		}
 	}
 
+	// dispatch last summary
+	if len(summary.properties) > 0 {
+		summaries <- summary
+	}
+
 	if err != nil && err != io.EOF {
 		log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
 	}
 	close(summaries)
 	wg.Wait()
+
+	return
 }
 
 // Adapted from 'ScanWords' in https://golang.org/src/bufio/scan.go
