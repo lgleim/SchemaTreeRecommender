@@ -86,9 +86,7 @@ func (m propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mappi
 type iList []*iItem
 
 // sort the list according to the current iList sort order
-func (l *iList) sort() {
-	// sort the properties according to the current iList sort order
-	ls := *l
+func (ls iList) sort() {
 	sort.Slice(ls, func(i, j int) bool { return ls[i].sortOrder < ls[j].sortOrder })
 }
 
@@ -96,8 +94,7 @@ func (l *iList) sort() {
 func (l *iList) sortAndDeduplicate() {
 	ls := *l
 
-	// ls.sort()
-	sort.Slice(ls, func(i, j int) bool { return ls[i].sortOrder < ls[j].sortOrder })
+	ls.sort()
 
 	// inplace deduplication
 	j := 0
@@ -111,9 +108,9 @@ func (l *iList) sortAndDeduplicate() {
 	*l = ls[:j+1]
 }
 
-func (l *iList) toSet() map[*iItem]bool {
-	pSet := make(map[*iItem]bool, len(*l))
-	for _, p := range *l {
+func (l iList) toSet() map[*iItem]bool {
+	pSet := make(map[*iItem]bool, len(l))
+	for _, p := range l {
 		pSet[p] = true
 	}
 	return pSet

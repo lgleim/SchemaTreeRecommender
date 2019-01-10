@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/gob"
 	"flag"
 	"fmt"
@@ -22,7 +23,7 @@ func (schema *SchemaTree) firstPass(fileName string, firstN uint64) {
 		}
 
 		t1 := time.Now()
-		subjectSummaryReader(fileName, schema.propMap, schema.typeMap, counter, firstN)
+		subjectCount := subjectSummaryReader(fileName, schema.propMap, schema.typeMap, counter, firstN)
 
 		fmt.Printf("%v properties, %v types\n", len(schema.propMap), len(schema.typeMap))
 
@@ -37,6 +38,11 @@ func (schema *SchemaTree) firstPass(fileName string, firstN uint64) {
 
 		fmt.Println("First Pass:", time.Since(t1))
 		PrintMemUsage()
+		if subjectCount != uint64(schema.Root.Support) {
+			fmt.Println("#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#")
+			fmt.Printf("WARNING: uint32 OVERFLOW - Processed %v subjects but root support is only %v!\n", subjectCount, schema.Root.Support)
+			fmt.Println("#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#")
+		}
 
 		err = schema.Save(fileName + ".firstPass.bin")
 		if err != nil {
@@ -69,10 +75,10 @@ func (schema *SchemaTree) secondPass(fileName string, firstN uint64) {
 	schema.updateSortOrder() // duplicate -- legacy compatability
 
 	inserter := func(s *subjectSummary) {
-		schema.Insert(s, false)
+		schema.Insert(s)
 	}
 
-	go countTreeNodes(schema)
+	// go countTreeNodes(schema)
 
 	t1 := time.Now()
 	subjectSummaryReader(fileName, schema.propMap, schema.typeMap, inserter, firstN)
@@ -83,12 +89,12 @@ func (schema *SchemaTree) secondPass(fileName string, firstN uint64) {
 }
 
 func (schema *SchemaTree) twoPass(fileName string, firstN uint64) {
-	go func() {
-		for true {
-			time.Sleep(10 * time.Second)
-			PrintMemUsage()
-		}
-	}()
+	// go func() {
+	// 	for true {
+	// 		time.Sleep(10 * time.Second)
+	// 		PrintMemUsage()
+	// 	}
+	// }()
 	schema.firstPass(fileName, firstN)
 	schema.secondPass(fileName, firstN)
 }
@@ -119,6 +125,21 @@ func main() {
 			log.Fatal("could not start CPU profile: ", err)
 		}
 		defer pprof.StopCPUProfile()
+	}
+
+	// write cpu profile to file
+	if *memprofile != "" {
+		defer func() {
+			f, err := os.Create(*memprofile)
+			if err != nil {
+				log.Fatal("could not create memory profile: ", err)
+			}
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("could not write memory profile: ", err)
+			}
+			f.Close()
+		}()
 	}
 
 	// write cpu profile to file
@@ -162,17 +183,17 @@ func main() {
 
 	if *serveRest {
 		serve(schema, *serveOnPort)
+		waitForReturn()
 	}
+}
 
-	if *memprofile != "" {
-		f, err := os.Create(*memprofile)
-		if err != nil {
-			log.Fatal("could not create memory profile: ", err)
-		}
-		runtime.GC() // get up-to-date statistics
-		if err := pprof.WriteHeapProfile(f); err != nil {
-			log.Fatal("could not write memory profile: ", err)
-		}
-		f.Close()
+func waitForReturn() {
+	buf := bufio.NewReader(os.Stdin)
+	fmt.Print("> ")
+	sentence, err := buf.ReadBytes('\n')
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		fmt.Println(string(sentence))
 	}
 }
