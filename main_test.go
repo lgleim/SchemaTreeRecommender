@@ -10,5 +10,5 @@ import "testing"
 // }
 
 func TestTwoPass(t *testing.T) {
-	twoPass("10M.nt.gz", 100000)
+	// twoPass("10M.nt.gz", 100000)
 }
