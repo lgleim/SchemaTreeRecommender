@@ -11,19 +11,17 @@ import (
 	"compress/bzip2"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
-	"strconv"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"github.com/biogo/hts/bgzf"
 	gzip "github.com/klauspost/pgzip"
+	"github.com/valyala/gozstd"
 	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
@@ -31,7 +29,7 @@ import (
 // equivalent of a transaction in frequent pattern mining
 type subjectSummary struct {
 	types      []*iType
-	properties iList
+	properties map[*iItem]uint32
 }
 
 func (subj *subjectSummary) String() string {
@@ -39,7 +37,7 @@ func (subj *subjectSummary) String() string {
 	for _, item := range subj.types {
 		types += *item.Str + " "
 	}
-	for _, item := range subj.properties {
+	for item := range subj.properties {
 		properties += *item.Str + " "
 	}
 	return fmt.Sprintf("{\n  types:      [ %v ]\n  properties: [ %v ]\n}", types, properties)
@@ -53,22 +51,36 @@ func subjectSummaryReader(
 	handler func(s *subjectSummary),
 	firstN uint64,
 ) (subjectCount uint64) {
-	// setting up IO
+	// IO setup
 	var reader io.Reader
 
 	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
 		fmt.Println("Reading data from stdin")
 		reader = os.Stdin
 	} else {
-		fmt.Printf("Reading data from file '%v'\n", fileName)
-
 		file, err := os.Open(fileName)
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer file.Close()
 
-		reader = file
+		stat, err := file.Stat()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if stat.IsDir() {
+			log.Fatal("Reading entire directories is not yet possible")
+		}
+		fmt.Printf("Reading data from file '%v'. Progress w.r.t. on-disk-size: \n", fileName)
+
+		// create and start progress bar
+		bar := pb.New(int(stat.Size())).SetUnits(pb.U_BYTES).SetRefreshRate(500 * time.Millisecond).Start()
+		bar.ShowElapsedTime = true
+		bar.ShowSpeed = true
+		reader = bar.NewProxyReader(file)
+		defer bar.Finish()
+
+		// decompress stream if applicable
 		switch ext := filepath.Ext(fileName); ext {
 		case ".bz2":
 			reader = bzip2.NewReader(reader) // Decompression
@@ -79,19 +91,6 @@ func subjectSummaryReader(
 			}
 			reader = tmp
 			defer tmp.Close()
-			// cmd := fmt.Sprintf("gzip -l %v | awk '{print $2}' | sed -n '2 p'", fileName)
-			// out, err := exec.Command("bash", "-c", cmd).Output()
-			if dat, err := ioutil.ReadFile(fileName + ".size"); err == nil {
-				decimals := regexp.MustCompile("[^0-9]+").ReplaceAllString(string(dat), "")
-				if size, err := strconv.Atoi(decimals); err == nil {
-					// create and start progress bar
-					bar := pb.New(size).SetUnits(pb.U_BYTES).SetRefreshRate(500 * time.Millisecond).Start()
-					bar.ShowElapsedTime = true
-					reader = bar.NewProxyReader(reader)
-					defer bar.Finish()
-				}
-			}
-
 		case ".bgz":
 			tmp, err := bgzf.NewReader(reader, 0)
 			if err != nil {
@@ -99,12 +98,14 @@ func subjectSummaryReader(
 			}
 			defer tmp.Close()
 			reader = tmp
+		case ".zst", ".zstd":
+			tmp := gozstd.NewReader(reader)
+			defer tmp.Release()
+			reader = tmp
 		}
 	}
 
-	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
-
-	// set up handler routines
+	// set up concurrent handler routines
 	concurrency := 4 * runtime.NumCPU()
 	summaries := make(chan *subjectSummary)
 	var wg sync.WaitGroup
@@ -124,8 +125,9 @@ func subjectSummaryReader(
 	var line, token []byte
 	var lastSubj string
 	var bytesProcessed int
+	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
+	summary := &subjectSummary{[]*iType{}, make(map[*iItem]uint32)}
 	rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-	summary := &subjectSummary{[]*iType{}, []*iItem{}}
 
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
 		if isPrefix {
@@ -156,7 +158,7 @@ func subjectSummaryReader(
 			}
 
 			lastSubj = string(token) // allocate string (on heap)
-			summary = &subjectSummary{[]*iType{}, make([]*iItem, 0, 1024)}
+			summary = &subjectSummary{[]*iType{}, make(map[*iItem]uint32)}
 		}
 
 		// process predicate
@@ -164,7 +166,7 @@ func subjectSummaryReader(
 		bytesProcessed, token = firstWord(line)
 
 		predicate := pMap.get(string(token))
-		summary.properties = append(summary.properties, predicate)
+		summary.properties[predicate]++
 
 		// rdf:type statements are also added to the types list
 		if predicate == rdfType {
