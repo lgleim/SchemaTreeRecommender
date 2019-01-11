@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/gob"
 	"flag"
 	"fmt"
 	"log"
@@ -27,21 +26,23 @@ func (schema *SchemaTree) firstPass(fileName string, firstN uint64) {
 
 		fmt.Printf("%v properties, %v types\n", len(schema.propMap), len(schema.typeMap))
 
-		f, _ := os.Create(fileName + ".propMap")
-		gob.NewEncoder(f).Encode(schema.propMap)
-		f.Close()
-		f, _ = os.Create(fileName + ".typeMap")
-		gob.NewEncoder(f).Encode(schema.typeMap)
-		f.Close()
+		// f, _ := os.Create(fileName + ".propMap")
+		// gob.NewEncoder(f).Encode(schema.propMap)
+		// f.Close()
+		// f, _ = os.Create(fileName + ".typeMap")
+		// gob.NewEncoder(f).Encode(schema.typeMap)
+		// f.Close()
 
 		schema.updateSortOrder()
 
 		fmt.Println("First Pass:", time.Since(t1))
 		PrintMemUsage()
-		if subjectCount != uint64(schema.Root.Support) {
-			fmt.Println("#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#")
-			fmt.Printf("WARNING: uint32 OVERFLOW - Processed %v subjects but root support is only %v!\n", subjectCount, schema.Root.Support)
-			fmt.Println("#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#")
+
+		const MaxUint32 = uint64(^uint32(0))
+		if subjectCount > MaxUint32 {
+			fmt.Print("\n#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#\n\n")
+			fmt.Printf("WARNING: uint32 OVERFLOW - Processed %v subjects but tree can only track support up to %v!\n", subjectCount, MaxUint32)
+			fmt.Print("\n#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#\n\n")
 		}
 
 		err = schema.Save(fileName + ".firstPass.bin")
