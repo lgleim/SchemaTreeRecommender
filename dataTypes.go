@@ -86,8 +86,8 @@ func (m propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mappi
 type iList []*iItem
 
 // sort the list according to the current iList sort order
-func (ls iList) sort() {
-	sort.Slice(ls, func(i, j int) bool { return ls[i].sortOrder < ls[j].sortOrder })
+func (l iList) sort() {
+	sort.Slice(l, func(i, j int) bool { return l[i].sortOrder < l[j].sortOrder })
 }
 
 // inplace sorting and deduplication.

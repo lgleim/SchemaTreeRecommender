@@ -95,10 +95,17 @@ func (tree SchemaTree) String() string {
 
 // thread-safe
 func (tree *SchemaTree) Insert(s *subjectSummary) {
-	properties := s.properties
-
+	// properties := s.properties
 	// sort the properties according to the current iList sort order & deduplicate
-	properties.sortAndDeduplicate()
+	// properties.sortAndDeduplicate()
+
+	properties := make(iList, len(s.properties), len(s.properties))
+	i := 0
+	for p := range s.properties {
+		properties[i] = p
+		i++
+	}
+	properties.sort()
 
 	// fmt.Println(properties)
 

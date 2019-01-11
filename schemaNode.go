@@ -236,8 +236,6 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 	copy(node.Children[i+1:], node.Children[i:])
 	node.Children[i] = newChild
 
-	node.Children = node.Children
-
 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
 
 	return newChild

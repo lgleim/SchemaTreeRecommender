@@ -17,7 +17,7 @@ import (
 func (schema *SchemaTree) firstPass(fileName string, firstN uint64) {
 	if _, err := os.Stat(fileName + ".firstPass.bin"); os.IsNotExist(err) {
 		counter := func(s *subjectSummary) {
-			for _, prop := range s.properties {
+			for prop := range s.properties {
 				prop.increment()
 			}
 		}
