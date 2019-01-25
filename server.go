@@ -1,4 +1,4 @@
-package main
+package schematree
 
 import (
 	"encoding/json"
@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-func serve(schema *SchemaTree, port int) {
+// Serve provides a REST API for the given schematree on the given port
+func Serve(schema *SchemaTree, port int) {
+	pMap := schema.PropMap
+
 	recommender := func(w http.ResponseWriter, r *http.Request) {
 		var properties []string
 		err := json.NewDecoder(r.Body).Decode(&properties)
@@ -17,13 +20,17 @@ func serve(schema *SchemaTree, port int) {
 		}
 		fmt.Println(properties)
 
-		// rdftype := schema.propMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
-		// memberOf := schema.propMap.get("http://www.wikidata.org/prop/direct/P463")
-		list := []*iItem{} //rdftype, memberOf}
+		list := []*IItem{}
+		for _, pString := range properties {
+			p, ok := pMap[pString]
+			if ok {
+				list = append(list, p)
+			}
+		}
 		// fmt.Println(schema.Support(list), schema.Root.Support)
 
 		t1 := time.Now()
-		rec := schema.recommendProperty(list)
+		rec := schema.RecommendProperty(list)
 		fmt.Println(time.Since(t1))
 
 		if len(rec) > 10 {

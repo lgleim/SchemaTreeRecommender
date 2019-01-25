@@ -1,4 +1,4 @@
-package main
+package schematree
 
 import (
 	"encoding/gob"
@@ -12,7 +12,7 @@ import (
 // Nodes of the Schema FP-Tree
 // TODO: determine wether to use hash-maps or arrays to store child notes in the tree
 type schemaNode struct {
-	ID     *iItem
+	ID     *IItem
 	parent *schemaNode
 	// Children map[*iItem]*schemaNode
 	Children   []*schemaNode
@@ -60,7 +60,7 @@ func (node *schemaNode) writeGob(e *gob.Encoder) error {
 	return err
 }
 
-func (node *schemaNode) decodeGob(d *gob.Decoder, props []*iItem, tMap map[uintptr]*iType) error {
+func (node *schemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintptr]*iType) error {
 	// function scoping to allow for garbage collection
 	// err := func() error {
 	// ID
@@ -163,7 +163,7 @@ const lockPrime = 97 // arbitrary prime number
 var globalItemLocks [lockPrime]*sync.Mutex
 var globalNodeLocks [lockPrime]*sync.RWMutex
 
-func (node *schemaNode) getChild(term *iItem) *schemaNode {
+func (node *schemaNode) getChild(term *IItem) *schemaNode {
 	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 	// child, ok := node.Children[term]
 	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
@@ -243,7 +243,7 @@ func (node *schemaNode) getChild(term *iItem) *schemaNode {
 
 // internal! propertyPath *MUST* be sorted in sortOrder (i.e. descending support)
 // thread-safe!
-func (node *schemaNode) prefixContains(propertyPath iList) bool {
+func (node *schemaNode) prefixContains(propertyPath IList) bool {
 	nextP := len(propertyPath) - 1                         // index of property expected to be seen next
 	for cur := node; cur.parent != nil; cur = cur.parent { // walk from leaf towards root
 

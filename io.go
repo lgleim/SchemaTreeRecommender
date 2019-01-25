@@ -4,13 +4,15 @@ I/O and RDF Parsing
 
 */
 
-package main
+package schematree
 
 import (
 	"bufio"
 	"compress/bzip2"
+	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -27,87 +29,40 @@ import (
 
 // All type annotations (types) and properties (properties) for a fixed subject
 // equivalent of a transaction in frequent pattern mining
-type subjectSummary struct {
-	types      []*iType
-	properties map[*iItem]uint32
+type SubjectSummary struct {
+	Types      []*iType
+	Properties map[*IItem]uint32
 }
 
-func (subj *subjectSummary) String() string {
+func (subj *SubjectSummary) String() string {
 	var types, properties string
-	for _, item := range subj.types {
+	for _, item := range subj.Types {
 		types += *item.Str + " "
 	}
-	for item := range subj.properties {
+	for item := range subj.Properties {
 		properties += *item.Str + " "
 	}
 	return fmt.Sprintf("{\n  types:      [ %v ]\n  properties: [ %v ]\n}", types, properties)
 }
 
 // Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
-func subjectSummaryReader(
+func SubjectSummaryReader(
 	fileName string,
 	pMap propMap,
 	tMap typeMap,
-	handler func(s *subjectSummary),
+	handler func(s *SubjectSummary),
 	firstN uint64,
 ) (subjectCount uint64) {
 	// IO setup
-	var reader io.Reader
-
-	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
-		fmt.Println("Reading data from stdin")
-		reader = os.Stdin
-	} else {
-		file, err := os.Open(fileName)
-		if err != nil {
-			log.Fatal(err)
-		}
-		defer file.Close()
-
-		stat, err := file.Stat()
-		if err != nil {
-			log.Fatal(err)
-		}
-		if stat.IsDir() {
-			log.Fatal("Reading entire directories is not yet possible")
-		}
-		fmt.Printf("Reading data from file '%v'. Progress w.r.t. on-disk-size: \n", fileName)
-
-		// create and start progress bar
-		bar := pb.New(int(stat.Size())).SetUnits(pb.U_BYTES).SetRefreshRate(500 * time.Millisecond).Start()
-		bar.ShowElapsedTime = true
-		bar.ShowSpeed = true
-		reader = bar.NewProxyReader(file)
-		defer bar.Finish()
-
-		// decompress stream if applicable
-		switch ext := filepath.Ext(fileName); ext {
-		case ".bz2":
-			reader = bzip2.NewReader(reader) // Decompression
-		case ".gz":
-			tmp, err := gzip.NewReaderN(reader, 8*1024*1024, 48) // readahead
-			if err != nil {
-				log.Fatal(err)
-			}
-			reader = tmp
-			defer tmp.Close()
-		case ".bgz":
-			tmp, err := bgzf.NewReader(reader, 0)
-			if err != nil {
-				log.Fatal(err)
-			}
-			defer tmp.Close()
-			reader = tmp
-		case ".zst", ".zstd":
-			tmp := gozstd.NewReader(reader)
-			defer tmp.Release()
-			reader = tmp
-		}
+	reader, err := UniversalReader(fileName)
+	if err != nil {
+		log.Fatal(err)
 	}
+	defer reader.Close()
 
 	// set up concurrent handler routines
 	concurrency := 4 * runtime.NumCPU()
-	summaries := make(chan *subjectSummary)
+	summaries := make(chan *SubjectSummary)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
 	for i := 0; i < concurrency; i++ {
@@ -121,12 +76,11 @@ func subjectSummaryReader(
 
 	// parse file
 	var isPrefix, skip bool
-	var err error
 	var line, token []byte
 	var lastSubj string
 	var bytesProcessed int
 	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
-	summary := &subjectSummary{[]*iType{}, make(map[*iItem]uint32)}
+	summary := &SubjectSummary{[]*iType{}, make(map[*IItem]uint32)}
 	rdfType := pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type")
 
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
@@ -158,7 +112,7 @@ func subjectSummaryReader(
 			}
 
 			lastSubj = string(token) // allocate string (on heap)
-			summary = &subjectSummary{[]*iType{}, make(map[*iItem]uint32)}
+			summary = &SubjectSummary{[]*iType{}, make(map[*IItem]uint32)}
 		}
 
 		// process predicate
@@ -166,7 +120,7 @@ func subjectSummaryReader(
 		bytesProcessed, token = firstWord(line)
 
 		predicate := pMap.get(string(token))
-		summary.properties[predicate]++
+		summary.Properties[predicate]++
 
 		// rdf:type statements are also added to the types list
 		if predicate == rdfType {
@@ -174,12 +128,12 @@ func subjectSummaryReader(
 			line = line[bytesProcessed:]
 			bytesProcessed, token = firstWord(line)
 
-			summary.types = append(summary.types, tMap.get(string(token)))
+			summary.Types = append(summary.Types, tMap.get(string(token)))
 		}
 	}
 
 	// dispatch last summary
-	if len(summary.properties) > 0 {
+	if len(summary.Properties) > 0 {
 		summaries <- summary
 	}
 
@@ -261,3 +215,66 @@ func isSpaceOrBracket(r rune) bool {
 	}
 	return false
 }
+
+func UniversalReader(fileName string) (reader io.ReadCloser, err error) {
+	if stat, _ := os.Stdin.Stat(); (stat.Mode() & os.ModeCharDevice) == 0 {
+		fmt.Println("Reading data from stdin")
+		reader = os.Stdin
+	} else {
+		var file *os.File
+		file, err = os.Open(fileName)
+		if err != nil {
+			return
+		}
+
+		var stat os.FileInfo
+		stat, err = file.Stat()
+		if err != nil {
+			return
+		}
+		if stat.IsDir() {
+			err = errors.New("Reading entire directories is not yet possible")
+			return
+		}
+		fmt.Printf("Reading data from file '%v'. Progress w.r.t. on-disk-size: \n", fileName)
+
+		// create and start progress bar
+		bar := pb.New(int(stat.Size())).SetUnits(pb.U_BYTES).SetRefreshRate(500 * time.Millisecond).Start()
+		bar.ShowElapsedTime = true
+		bar.ShowSpeed = true
+		reader = bar.NewProxyReader(file)
+
+		// decompress stream if applicable
+		switch ext := filepath.Ext(fileName); ext {
+		case ".bz2":
+			reader = ioutil.NopCloser(bzip2.NewReader(reader)) // Decompression
+		case ".gz":
+			reader, err = gzip.NewReaderN(reader, 8*1024*1024, 48) // readahead
+		case ".bgz":
+			reader, err = bgzf.NewReader(reader, 0)
+		case ".zst", ".zstd":
+			reader = releaseCloser{gozstd.NewReader(reader)}
+		}
+
+		if err != nil {
+			return
+		}
+
+		reader = finishCloser{reader, bar, file}
+	}
+	return
+}
+
+type releaseCloser struct {
+	*gozstd.Reader
+}
+
+func (r releaseCloser) Close() error { r.Release(); return nil }
+
+type finishCloser struct {
+	io.ReadCloser
+	bar  *pb.ProgressBar
+	file *os.File
+}
+
+func (r finishCloser) Close() error { r.bar.Finish(); defer r.file.Close(); return r.ReadCloser.Close() }

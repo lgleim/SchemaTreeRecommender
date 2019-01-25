@@ -1,4 +1,4 @@
-package main
+package schematree
 
 import (
 	"fmt"
@@ -45,27 +45,27 @@ func (m *typeMap) get(iri string) (item *iType) {
 // - a string IRI (str) and
 // - its support, i.e. its total number of occurrences (totalCount)
 // - an integer indicating sort order
-type iItem struct {
+type IItem struct {
 	Str              *string
 	TotalCount       uint64
 	sortOrder        uint32
 	traversalPointer *schemaNode // node traversal pointer
 }
 
-func (p *iItem) increment() {
+func (p *IItem) increment() {
 	atomic.AddUint64(&p.TotalCount, 1)
 }
 
-func (p iItem) String() string {
+func (p IItem) String() string {
 	return fmt.Sprint(p.TotalCount, "x\t", *p.Str, " (", p.sortOrder, ")")
 }
 
-type propMap map[string]*iItem
+type propMap map[string]*IItem
 
 var propMapLock sync.Mutex
 
 // thread-safe
-func (m propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
+func (m propMap) get(iri string) (item *IItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
 	item, ok := m[iri]
 	if !ok {
 		propMapLock.Lock()
@@ -76,25 +76,25 @@ func (m propMap) get(iri string) (item *iItem) { // TODO: Implement sameas Mappi
 			return
 		}
 
-		item = &iItem{&iri, 0, uint32(len(m)), nil}
+		item = &IItem{&iri, 0, uint32(len(m)), nil}
 		m[iri] = item
 	}
 	return
 }
 
 // An array of pointers to IRI structs
-type iList []*iItem
+type IList []*IItem
 
-// sort the list according to the current iList sort order
-func (l iList) sort() {
+// Sort the list according to the current iList Sort order
+func (l IList) Sort() {
 	sort.Slice(l, func(i, j int) bool { return l[i].sortOrder < l[j].sortOrder })
 }
 
 // inplace sorting and deduplication.
-func (l *iList) sortAndDeduplicate() {
+func (l *IList) sortAndDeduplicate() {
 	ls := *l
 
-	ls.sort()
+	ls.Sort()
 
 	// inplace deduplication
 	j := 0
@@ -108,15 +108,15 @@ func (l *iList) sortAndDeduplicate() {
 	*l = ls[:j+1]
 }
 
-func (l iList) toSet() map[*iItem]bool {
-	pSet := make(map[*iItem]bool, len(l))
+func (l IList) toSet() map[*IItem]bool {
+	pSet := make(map[*IItem]bool, len(l))
 	for _, p := range l {
 		pSet[p] = true
 	}
 	return pSet
 }
 
-func (l iList) String() string {
+func (l IList) String() string {
 	//// list representation (includes duplicates)
 	o := "[ "
 	for i := 0; i < len(l); i++ {
@@ -134,7 +134,7 @@ func (l iList) String() string {
 
 // struct to rank suggestions
 type rankedPropertyCandidate struct {
-	Property    *iItem
+	Property    *IItem
 	Probability float64
 }
 

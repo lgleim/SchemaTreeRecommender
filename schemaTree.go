@@ -1,8 +1,9 @@
-package main
+package schematree
 
 import (
 	"encoding/gob"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"sync"
@@ -13,8 +14,8 @@ import (
 )
 
 type SchemaTree struct {
-	propMap propMap
-	typeMap typeMap
+	PropMap propMap
+	TypeMap typeMap
 	Root    schemaNode
 	MinSup  uint32
 }
@@ -23,8 +24,8 @@ type SchemaTree struct {
 func NewSchemaTree() (tree *SchemaTree) {
 	pMap := make(propMap)
 	tree = &SchemaTree{
-		propMap: pMap,
-		typeMap: make(typeMap),
+		PropMap: pMap,
+		TypeMap: make(typeMap),
 		Root:    newRootNode(pMap),
 		MinSup:  3,
 	}
@@ -76,7 +77,7 @@ func (tree SchemaTree) String() string {
 
 	cluster := ""
 
-	for _, prop := range tree.propMap {
+	for _, prop := range tree.PropMap {
 		cluster = ""
 		for node := prop.traversalPointer; node != nil; node = node.nextSameID {
 			if node.Support >= minSupport {
@@ -94,18 +95,18 @@ func (tree SchemaTree) String() string {
 }
 
 // thread-safe
-func (tree *SchemaTree) Insert(s *subjectSummary) {
+func (tree *SchemaTree) Insert(s *SubjectSummary) {
 	// properties := s.properties
 	// sort the properties according to the current iList sort order & deduplicate
 	// properties.sortAndDeduplicate()
 
-	properties := make(iList, len(s.properties), len(s.properties))
+	properties := make(IList, len(s.Properties), len(s.Properties))
 	i := 0
-	for p := range s.properties {
+	for p := range s.Properties {
 		properties[i] = p
 		i++
 	}
-	properties.sort()
+	properties.Sort()
 
 	// fmt.Println(properties)
 
@@ -118,7 +119,7 @@ func (tree *SchemaTree) Insert(s *subjectSummary) {
 	}
 
 	// update class "counts" at tail
-	node.insertTypes(s.types)
+	node.insertTypes(s.Types)
 }
 
 func (tree *SchemaTree) reorganize() {
@@ -133,9 +134,9 @@ func (tree *SchemaTree) reorganize() {
 func (tree *SchemaTree) updateSortOrder() {
 	// make a list of all known properties
 	// Runtime: O(n), Memory: O(n)
-	iList := make(iList, len(tree.propMap))
+	iList := make(IList, len(tree.PropMap))
 	i := 0
-	for _, v := range tree.propMap {
+	for _, v := range tree.PropMap {
 		iList[i] = v
 		i++
 	}
@@ -159,14 +160,14 @@ func (tree *SchemaTree) updateSortOrder() {
 }
 
 // Support returns the total cooccurrence-frequency of the given property list
-func (tree *SchemaTree) Support(properties iList) uint32 {
+func (tree *SchemaTree) Support(properties IList) uint32 {
 	var support uint32
 
 	if len(properties) == 0 {
 		return tree.Root.Support // empty set occured in all transactions
 	}
 
-	properties.sort() // descending by support
+	properties.Sort() // descending by support
 
 	// check all branches that include least frequent term
 	for term := properties[len(properties)-1].traversalPointer; term != nil; term = term.nextSameID {
@@ -178,15 +179,15 @@ func (tree *SchemaTree) Support(properties iList) uint32 {
 	return support
 }
 
-func (tree *SchemaTree) recommendProperty(properties iList) (ranked propertyRecommendations) {
+func (tree *SchemaTree) RecommendProperty(properties IList) (ranked propertyRecommendations) {
 
 	if len(properties) > 0 {
 
-		properties.sort() // descending by support
+		properties.Sort() // descending by support
 
 		pSet := properties.toSet()
 
-		candidates := make(map[*iItem]uint32)
+		candidates := make(map[*IItem]uint32)
 
 		var makeCandidates func(startNode *schemaNode)
 		makeCandidates = func(startNode *schemaNode) { // head hunter function ;)
@@ -232,8 +233,8 @@ func (tree *SchemaTree) recommendProperty(properties iList) (ranked propertyReco
 	} else {
 		fmt.Println(tree.Root.Support)
 		setSup := float64(tree.Root.Support) // empty set occured in all transactions
-		ranked = make([]rankedPropertyCandidate, len(tree.propMap), len(tree.propMap))
-		for _, prop := range tree.propMap {
+		ranked = make([]rankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+		for _, prop := range tree.PropMap {
 			ranked[prop.sortOrder] = rankedPropertyCandidate{prop, float64(prop.TotalCount) / setSup}
 		}
 	}
@@ -303,8 +304,8 @@ func (tree *SchemaTree) Save(filePath string) error {
 	e := gob.NewEncoder(w)
 
 	// encode propMap
-	props := make([]*iItem, len(tree.propMap), len(tree.propMap))
-	for _, p := range tree.propMap {
+	props := make([]*IItem, len(tree.PropMap), len(tree.PropMap))
+	for _, p := range tree.PropMap {
 		props[p.sortOrder] = p
 	}
 	err = e.Encode(props)
@@ -313,8 +314,8 @@ func (tree *SchemaTree) Save(filePath string) error {
 	}
 
 	// encode typeMap
-	types := make(map[uintptr]*iType, len(tree.typeMap))
-	for _, t := range tree.typeMap {
+	types := make(map[uintptr]*iType, len(tree.TypeMap))
+	for _, t := range tree.TypeMap {
 		types[uintptr(unsafe.Pointer(t))] = t
 	}
 	err = e.Encode(types)
@@ -366,14 +367,14 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	d := gob.NewDecoder(r)
 
 	// decode propMap
-	var props []*iItem
+	var props []*IItem
 	err = d.Decode(&props)
 	if err != nil {
 		return nil, err
 	}
 	for sortOrder, item := range props {
 		item.sortOrder = uint32(sortOrder)
-		tree.propMap[*item.Str] = item
+		tree.PropMap[*item.Str] = item
 	}
 	fmt.Printf("%v properties... ", len(props))
 
@@ -384,7 +385,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 		return nil, err
 	}
 	for _, t := range types {
-		tree.typeMap[*t.Str] = t
+		tree.TypeMap[*t.Str] = t
 	}
 	fmt.Printf("%v types... ", len(types))
 
@@ -401,7 +402,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	// legacy import bug workaround
 	if *tree.Root.ID.Str != "root" {
 		fmt.Println("WARNING!!! Encountered legacy root node import bug - root node counts will be incorrect!")
-		tree.Root.ID = tree.propMap.get("root")
+		tree.Root.ID = tree.PropMap.get("root")
 	}
 
 	if err != nil {
@@ -411,4 +412,93 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 
 	fmt.Println(time.Since(t1))
 	return tree, err
+}
+
+// first pass: collect I-List and statistics
+func (tree *SchemaTree) firstPass(fileName string, firstN uint64) {
+	if _, err := os.Stat(fileName + ".firstPass.bin"); os.IsNotExist(err) {
+		counter := func(s *SubjectSummary) {
+			for prop := range s.Properties {
+				prop.increment()
+			}
+		}
+
+		t1 := time.Now()
+		subjectCount := SubjectSummaryReader(fileName, tree.PropMap, tree.TypeMap, counter, firstN)
+
+		fmt.Printf("%v properties, %v types\n", len(tree.PropMap), len(tree.TypeMap))
+
+		// f, _ := os.Create(fileName + ".propMap")
+		// gob.NewEncoder(f).Encode(schema.propMap)
+		// f.Close()
+		// f, _ = os.Create(fileName + ".typeMap")
+		// gob.NewEncoder(f).Encode(schema.typeMap)
+		// f.Close()
+
+		tree.updateSortOrder()
+
+		fmt.Println("First Pass:", time.Since(t1))
+		PrintMemUsage()
+
+		const MaxUint32 = uint64(^uint32(0))
+		if subjectCount > MaxUint32 {
+			fmt.Print("\n#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#\n\n")
+			fmt.Printf("WARNING: uint32 OVERFLOW - Processed %v subjects but tree can only track support up to %v!\n", subjectCount, MaxUint32)
+			fmt.Print("\n#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#\n\n")
+		}
+
+		err = tree.Save(fileName + ".firstPass.bin")
+		if err != nil {
+			log.Fatalln(err)
+		}
+	} else {
+		// f1, err1 := os.Open(fileName + ".propMap")
+		// f2, err2 := os.Open(fileName + ".typeMap")
+
+		// if err1 == nil && err2 == nil {
+		// 	fmt.Print("Loading type- and propertyMap directly from corresponding gobs: ")
+		// 	tmp := NewSchemaTree()
+		// 	gob.NewDecoder(f1).Decode(&tmp.propMap)
+		// 	gob.NewDecoder(f2).Decode(&tmp.typeMap)
+		// 	tmp.updateSortOrder()
+		// 	*schema = *tmp
+		// 	fmt.Printf("%v properties, %v types\n", len(tmp.propMap), len(tmp.typeMap))
+		// } else {
+		tmp, err := LoadSchemaTree(fileName + ".firstPass.bin")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		*tree = *tmp
+		// }
+	}
+}
+
+// build schema tree
+func (tree *SchemaTree) secondPass(fileName string, firstN uint64) {
+	tree.updateSortOrder() // duplicate -- legacy compatability
+
+	inserter := func(s *SubjectSummary) {
+		tree.Insert(s)
+	}
+
+	// go countTreeNodes(schema)
+
+	t1 := time.Now()
+	SubjectSummaryReader(fileName, tree.PropMap, tree.TypeMap, inserter, firstN)
+
+	fmt.Println("Second Pass:", time.Since(t1))
+	PrintMemUsage()
+	// PrintLockStats()
+}
+
+// TwoPass constructs a SchemaTree from the firstN subjects of the given NTriples file using a two-pass approach
+func (tree *SchemaTree) TwoPass(fileName string, firstN uint64) {
+	// go func() {
+	// 	for true {
+	// 		time.Sleep(10 * time.Second)
+	// 		PrintMemUsage()
+	// 	}
+	// }()
+	tree.firstPass(fileName, firstN)
+	tree.secondPass(fileName, firstN)
 }
