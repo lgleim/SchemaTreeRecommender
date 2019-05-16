@@ -69,6 +69,20 @@ func (tree *SchemaTree) destroy() {
 	// }
 }
 
+// WritePropFreqs writes all Properties together with their Support to the given File as CSV
+func (tree SchemaTree) WritePropFreqs(file string) {
+	f, err := os.Create(file)
+	if err != nil {
+		log.Fatalln("Could not open file to writePropFreqs!")
+	}
+	defer f.Close()
+
+	f.WriteString("URI;Frequency\n")
+	for uri, item := range tree.PropMap {
+		f.WriteString(fmt.Sprintf("%v;%v\n", uri, item.TotalCount))
+	}
+}
+
 func (tree SchemaTree) String() string {
 	var minSupport uint32 = 100000
 	s := "digraph schematree { newrank=true; labelloc=b; color=blue; fontcolor=blue; style=dotted;\n"
@@ -155,7 +169,7 @@ func (tree *SchemaTree) updateSortOrder() {
 	// update term's internal sortOrder
 	// Runtime: O(n), Memory: -
 	for i, v := range iList {
-		v.sortOrder = uint32(i)
+		v.SortOrder = uint32(i)
 	}
 }
 
@@ -222,20 +236,21 @@ func (tree *SchemaTree) RecommendProperty(properties IList) (ranked propertyReco
 		// now that all candidates have been collected, rank them
 		i := 0
 		setSup := float64(setSupport)
-		ranked = make([]rankedPropertyCandidate, len(candidates), len(candidates))
+		ranked = make([]RankedPropertyCandidate, len(candidates), len(candidates))
 		for candidate, support := range candidates {
-			ranked[i] = rankedPropertyCandidate{candidate, float64(support) / setSup}
+			ranked[i] = RankedPropertyCandidate{candidate, float64(support) / setSup}
 			i++
 		}
 
 		// sort descending by support
 		sort.Slice(ranked, func(i, j int) bool { return ranked[i].Probability > ranked[j].Probability })
 	} else {
-		fmt.Println(tree.Root.Support)
+		// TODO: Race condition on propMap: fatal error: concurrent map iteration and map write
+		// fmt.Println(tree.Root.Support)
 		setSup := float64(tree.Root.Support) // empty set occured in all transactions
-		ranked = make([]rankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+		ranked = make([]RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
 		for _, prop := range tree.PropMap {
-			ranked[prop.sortOrder] = rankedPropertyCandidate{prop, float64(prop.TotalCount) / setSup}
+			ranked[int(prop.SortOrder)] = RankedPropertyCandidate{prop, float64(prop.TotalCount) / setSup}
 		}
 	}
 
@@ -306,7 +321,7 @@ func (tree *SchemaTree) Save(filePath string) error {
 	// encode propMap
 	props := make([]*IItem, len(tree.PropMap), len(tree.PropMap))
 	for _, p := range tree.PropMap {
-		props[p.sortOrder] = p
+		props[int(p.SortOrder)] = p
 	}
 	err = e.Encode(props)
 	if err != nil {
@@ -373,7 +388,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 		return nil, err
 	}
 	for sortOrder, item := range props {
-		item.sortOrder = uint32(sortOrder)
+		item.SortOrder = uint32(sortOrder)
 		tree.PropMap[*item.Str] = item
 	}
 	fmt.Printf("%v properties... ", len(props))
@@ -426,7 +441,7 @@ func (tree *SchemaTree) firstPass(fileName string, firstN uint64) {
 		t1 := time.Now()
 		subjectCount := SubjectSummaryReader(fileName, tree.PropMap, tree.TypeMap, counter, firstN)
 
-		fmt.Printf("%v properties, %v types\n", len(tree.PropMap), len(tree.TypeMap))
+		fmt.Printf("%v subjects, %v properties, %v types\n", subjectCount, len(tree.PropMap), len(tree.TypeMap))
 
 		// f, _ := os.Create(fileName + ".propMap")
 		// gob.NewEncoder(f).Encode(schema.propMap)

@@ -48,7 +48,7 @@ func (m *typeMap) get(iri string) (item *iType) {
 type IItem struct {
 	Str              *string
 	TotalCount       uint64
-	sortOrder        uint32
+	SortOrder        uint32
 	traversalPointer *schemaNode // node traversal pointer
 }
 
@@ -57,7 +57,7 @@ func (p *IItem) increment() {
 }
 
 func (p IItem) String() string {
-	return fmt.Sprint(p.TotalCount, "x\t", *p.Str, " (", p.sortOrder, ")")
+	return fmt.Sprint(p.TotalCount, "x\t", *p.Str, " (", p.SortOrder, ")")
 }
 
 type propMap map[string]*IItem
@@ -87,7 +87,7 @@ type IList []*IItem
 
 // Sort the list according to the current iList Sort order
 func (l IList) Sort() {
-	sort.Slice(l, func(i, j int) bool { return l[i].sortOrder < l[j].sortOrder })
+	sort.Slice(l, func(i, j int) bool { return l[i].SortOrder < l[j].SortOrder })
 }
 
 // inplace sorting and deduplication.
@@ -133,12 +133,12 @@ func (l IList) String() string {
 }
 
 // struct to rank suggestions
-type rankedPropertyCandidate struct {
+type RankedPropertyCandidate struct {
 	Property    *IItem
 	Probability float64
 }
 
-type propertyRecommendations []rankedPropertyCandidate
+type propertyRecommendations []RankedPropertyCandidate
 
 func (ps propertyRecommendations) String() string {
 	s := ""

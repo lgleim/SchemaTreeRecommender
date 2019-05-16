@@ -25,6 +25,7 @@ func main() {
 	visualize := flag.Bool("viz", false, "output a GraphViz visualization of the tree to `tree.png`")
 	serveRest := flag.Bool("api", false, "specifying this flag enables the rest api")
 	serveOnPort := flag.Int("port", 8080, "the port the rest interface will be served on. Use in conjunction with -api")
+	writeOutPropertyFreqs := flag.Bool("writeOutPropertyFreqs", false, "set this to write the frequency of all properties to a csv after first pass or schematree loading")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -80,10 +81,14 @@ func main() {
 	} else {
 		schema = schematree.NewSchemaTree()
 		schema.TwoPass(*fileName, uint64(*firstNsubjects))
-
-		schematree.PrintMemUsage()
-
 		schema.Save(*fileName + ".schemaTree.bin")
+	}
+
+	schematree.PrintMemUsage()
+
+	if *writeOutPropertyFreqs {
+		schema.WritePropFreqs("propertyFreqs.csv")
+		fmt.Println("Wrote PropertyFreqs to propertyFreqs.csv")
 	}
 
 	if *visualize {
