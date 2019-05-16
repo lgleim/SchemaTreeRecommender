@@ -6,3 +6,20 @@
 *.dot
 *.bin
 *.prof
+*.csv
+*.tsv
+*.recommendations
+*.log
+*.eps
+*.ods
+*.svg
+
+# Binaries
+evaluation/evaluation
+sameAsExtractor/sameAsExtractor
+sameAsReducer/sameAsReducer
+splitter/splitter
+wikiEvaluation/wikiEvaluation
+treebuilder/treebuilder
+wikiEvaluation/collectRecommendations/collectRecommendations
+wikiEvaluation/evaluateRecommendations/evaluateRecommendations
