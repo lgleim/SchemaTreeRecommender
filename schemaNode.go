@@ -28,7 +28,7 @@ func newRootNode(pMap propMap) schemaNode {
 
 func (node *schemaNode) writeGob(e *gob.Encoder) error {
 	// ID
-	err := e.Encode(node.ID.sortOrder)
+	err := e.Encode(node.ID.SortOrder)
 	if err != nil {
 		return err
 	}
@@ -69,7 +69,7 @@ func (node *schemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintp
 	if err != nil {
 		return err
 	}
-	node.ID = props[id]
+	node.ID = props[int(id)]
 
 	// traversal pointer repopulation
 	node.nextSameID = node.ID.traversalPointer
@@ -247,7 +247,7 @@ func (node *schemaNode) prefixContains(propertyPath IList) bool {
 	nextP := len(propertyPath) - 1                         // index of property expected to be seen next
 	for cur := node; cur.parent != nil; cur = cur.parent { // walk from leaf towards root
 
-		if cur.ID.sortOrder < propertyPath[nextP].sortOrder { // we already walked past the next expected property
+		if cur.ID.SortOrder < propertyPath[nextP].SortOrder { // we already walked past the next expected property
 			return false
 		}
 		if cur.ID == propertyPath[nextP] {

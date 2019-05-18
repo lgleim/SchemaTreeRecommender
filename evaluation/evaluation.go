@@ -105,12 +105,27 @@ func main() {
 			log.Fatalln(err)
 		}
 
+		// memoize empty set recommendations
+		setSup := float64(tree.Root.Support) // empty set occured in all transactions
+		emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+		for _, prop := range tree.PropMap {
+			emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
+				Property:    prop,
+				Probability: float64(prop.TotalCount) / setSup,
+			}
+		}
+
 		var wg sync.WaitGroup
 		results := make(chan evalResult, 1000) // collect eval results via channel
 
 		// evaluate the rank the recommender assigns the left out property
 		evaluate := func(properties schematree.IList, leftOut *schematree.IItem) {
-			recs := tree.RecommendProperty(properties)
+			var recs []schematree.RankedPropertyCandidate
+			if len(properties) == 0 {
+				recs = emptyRecs
+			} else {
+				recs = tree.RecommendProperty(properties)
+			}
 			for i, r := range recs {
 				if r.Property == leftOut { // found item to recover
 					for i > 0 && recs[i-1].Probability == r.Probability {
@@ -243,7 +258,11 @@ func makeStatistics(stats map[uint16][]uint32, fileName string) (output string) 
 	for i, setLen := range setLens {
 		v := stats[uint16(setLen)]
 		// plotutil.AddLines(p, strconv.Itoa(setLen))
-		line, _ := plotter.NewLine(toPoints(v))
+		line, err := plotter.NewLine(toPoints(v))
+		if err != nil {
+			fmt.Println("Error:", err)
+			continue
+		}
 		line.LineStyle.Color = color.RGBA{0, uint8(i * 255 / l), 0, 255}
 		p.Add(line)
 		p.Legend.Add(strconv.Itoa(setLen), line)
@@ -263,10 +282,16 @@ func toPoints(v []uint32) (pts plotter.XYs) {
 	pts = make(plotter.XYs, len(v), len(v))
 	l := float64(len(v)-1) / 100
 	maxY := float64(v[len(v)-1]) / 100
+	if maxY == 0 {
+		maxY = 1
+	}
 	for i, y := range v {
 		pts[i].X = float64(i) / l
 		pts[i].Y = float64(y) / maxY
 	}
+
+	// downsample to a maximum of 100 points
+	pts = LTTB(pts, 100)
 	return
 }
 
@@ -360,4 +385,82 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// LTTB down-samples the data to contain only threshold number of points that
+// have the same visual shape as the original data
+// adapted from https://github.com/dgryski/go-lttb/blob/master/lttb.go
+func LTTB(data plotter.XYs, threshold int) plotter.XYs {
+
+	if threshold >= len(data) || threshold == 0 {
+		return data // Nothing to do
+	}
+
+	sampled := make(plotter.XYs, 0, threshold)
+
+	// Bucket size. Leave room for start and end data points
+	every := float64(len(data)-2) / float64(threshold-2)
+
+	sampled = append(sampled, data[0]) // Always add the first point
+
+	bucketStart := 1
+	bucketCenter := int(math.Floor(every)) + 1
+
+	var a int
+
+	for i := 0; i < threshold-2; i++ {
+
+		bucketEnd := int(math.Floor(float64(i+2)*every)) + 1
+
+		// Calculate point average for next bucket (containing c)
+		avgRangeStart := bucketCenter
+		avgRangeEnd := bucketEnd
+
+		if avgRangeEnd >= len(data) {
+			avgRangeEnd = len(data)
+		}
+
+		avgRangeLength := float64(avgRangeEnd - avgRangeStart)
+
+		var avgX, avgY float64
+		for ; avgRangeStart < avgRangeEnd; avgRangeStart++ {
+			avgX += data[avgRangeStart].X
+			avgY += data[avgRangeStart].Y
+		}
+		avgX /= avgRangeLength
+		avgY /= avgRangeLength
+
+		// Get the range for this bucket
+		rangeOffs := bucketStart
+		rangeTo := bucketCenter
+
+		// Point a
+		pointAX := data[a].X
+		pointAY := data[a].Y
+
+		maxArea := -1.0
+
+		var nextA int
+		for ; rangeOffs < rangeTo; rangeOffs++ {
+			// Calculate triangle area over three buckets
+			area := (pointAX-avgX)*(data[rangeOffs].Y-pointAY) - (pointAX-data[rangeOffs].X)*(avgY-pointAY)
+			// We only care about the relative area here.
+			// Calling math.Abs() is slower than squaring
+			area *= area
+			if area > maxArea {
+				maxArea = area
+				nextA = rangeOffs // Next a is this b
+			}
+		}
+
+		sampled = append(sampled, data[nextA]) // Pick this point from the bucket
+		a = nextA                              // This a is the next a (chosen b)
+
+		bucketStart = bucketCenter
+		bucketCenter = bucketEnd
+	}
+
+	sampled = append(sampled, data[len(data)-1]) // Always add last
+
+	return sampled
 }
