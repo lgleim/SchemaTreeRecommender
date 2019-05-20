@@ -1,0 +1,1 @@
+Subproject to split .nt files into test- and trainingset
