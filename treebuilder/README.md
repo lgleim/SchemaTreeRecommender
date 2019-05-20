@@ -1,0 +1,1 @@
+The main tool that (depending on command line flags -- run with `-h` to see all flags) either builds a "schematree" of an N-Triples file, provided as input, or serves recommendations based on a precomputed tree.
