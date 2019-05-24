@@ -8,10 +8,10 @@ import (
 	"io"
 	"log"
 	"os"
+	"recommender/schematree"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
-	"schematree"
 	"unicode/utf8"
 
 	gzip "github.com/klauspost/pgzip"
