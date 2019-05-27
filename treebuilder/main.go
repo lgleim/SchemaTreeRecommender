@@ -10,7 +10,7 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 
-	"schematree"
+	"recommender/schematree"
 )
 
 func main() {

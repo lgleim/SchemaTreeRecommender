@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"recommender/schematree"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
-	"schematree"
 	"strings"
 	"unicode/utf8"
 
