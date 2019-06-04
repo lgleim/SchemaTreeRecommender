@@ -10,7 +10,6 @@ build:
     - cd $GOPATH/src
     - ln -s $CI_PROJECT_DIR
     - cd $CI_PROJECT_NAME
-    - ls -a
   script:
     - cd schematree
     - go get
