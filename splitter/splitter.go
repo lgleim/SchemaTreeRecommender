@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
-	"schematree"
+	"recommender/schematree"
 	"strconv"
 	"strings"
 	"unicode/utf8"

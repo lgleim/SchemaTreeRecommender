@@ -7,7 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"runtime"
-	"schematree"
+	"recommender/schematree"
 	"strings"
 	"sync"
 	"sync/atomic"
