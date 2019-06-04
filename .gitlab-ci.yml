@@ -6,16 +6,12 @@ stages:
 
 build:
   stage: build
-  script:
-    - echo $GOPATH
-    - echo $CI_PROJECT_NAMESPACE
-    - echo $CI_PROJECT_DIR
-    - echo $CI_PROJECT_NAME
-    
+  before_script:
     - cd $GOPATH/src
     - ln -s $CI_PROJECT_DIR
     - cd $CI_PROJECT_NAME
     - ls -a
+  script:
     - cd schematree
     - go get
     - go build
