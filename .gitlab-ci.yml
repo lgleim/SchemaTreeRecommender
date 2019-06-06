@@ -1,0 +1,43 @@
+image: golang:latest
+
+stages:
+    - build
+    - test    
+
+build:
+  stage: build
+  before_script:
+    - cd $GOPATH/src
+    - ln -s $CI_PROJECT_DIR
+    - cd $CI_PROJECT_NAME
+  script:
+    - cd schematree
+    - go get
+    - go build
+    - cd ../treebuilder
+    - go get
+    - go build
+    - cd ../evaluation
+    - go get
+    - go build
+    - cd ../sameAsExtractor
+    - go get
+    - go build
+    - cd ../sameAsReducer
+    - go get
+    - go build
+    - cd ../splitter
+    - go get
+    - go build
+    - cd ../wikiEvaluation/collectRecommendations
+    - go get
+    - go build
+    - cd ../evaluateRecommendations
+    - go get
+    - go build
+    - cd ../extract
+    - go get
+    - go build
+    - cd ..
+    - go get
+    - go build
