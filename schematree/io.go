@@ -23,7 +23,6 @@ import (
 
 	"github.com/biogo/hts/bgzf"
 	gzip "github.com/klauspost/pgzip"
-	"github.com/valyala/gozstd"
 	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
@@ -252,8 +251,8 @@ func UniversalReader(fileName string) (reader io.ReadCloser, err error) {
 			reader, err = gzip.NewReaderN(reader, 8*1024*1024, 48) // readahead
 		case ".bgz":
 			reader, err = bgzf.NewReader(reader, 0)
-		case ".zst", ".zstd":
-			reader = releaseCloser{gozstd.NewReader(reader)}
+			//case ".zst", ".zstd":
+			//reader = releaseCloser{gozstd.NewReader(reader)}
 		}
 
 		if err != nil {
@@ -265,11 +264,11 @@ func UniversalReader(fileName string) (reader io.ReadCloser, err error) {
 	return
 }
 
-type releaseCloser struct {
-	*gozstd.Reader
-}
+//type releaseCloser struct {
+//	*gozstd.Reader
+//}
 
-func (r releaseCloser) Close() error { r.Release(); return nil }
+//func (r releaseCloser) Close() error { r.Release(); return nil }
 
 type finishCloser struct {
 	io.ReadCloser
