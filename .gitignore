@@ -13,6 +13,7 @@
 *.eps
 *.ods
 *.svg
+*.exe
 
 # Binaries
 evaluation/evaluation
