@@ -16,6 +16,8 @@
 *.exe
 *.out
 
+!10M.nt.gz.schemaTree.bin
+
 # Binaries
 evaluation/evaluation
 sameAsExtractor/sameAsExtractor
