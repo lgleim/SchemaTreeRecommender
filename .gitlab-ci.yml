@@ -1,43 +1,40 @@
-image: golang:latest
+image: golang:1.12
 
 stages:
     - build
-    - test    
+    - test
 
 build:
-  stage: build
-  before_script:
-    - cd $GOPATH/src
-    - ln -s $CI_PROJECT_DIR
-    - cd $CI_PROJECT_NAME
-  script:
-    - cd schematree
-    - go get
-    - go build
-    - cd ../treebuilder
-    - go get
-    - go build
-    - cd ../evaluation
-    - go get
-    - go build
-    - cd ../sameAsExtractor
-    - go get
-    - go build
-    - cd ../sameAsReducer
-    - go get
-    - go build
-    - cd ../splitter
-    - go get
-    - go build
-    - cd ../wikiEvaluation/collectRecommendations
-    - go get
-    - go build
-    - cd ../evaluateRecommendations
-    - go get
-    - go build
-    - cd ../extract
-    - go get
-    - go build
-    - cd ..
-    - go get
-    - go build
+    stage: build
+    artifacts:
+        when: on_success
+        expire_in: 1 day
+        paths:
+            - .cache
+            - .bin
+        
+    before_script:
+        - cd $GOPATH/src
+        - ln -s $CI_PROJECT_DIR
+        - cd $CI_PROJECT_NAME
+    script:
+        - go get ./...
+        - go build ./...
+    after_script:
+        - mkdir -p $CI_PROJECT_DIR/.cache
+        - mkdir -p $CI_PROJECT_DIR/.bin
+        - cd $GOPATH/src
+        - cp -R * $CI_PROJECT_DIR/.cache
+        - cd $GOPATH/bin
+        - cp -R * $CI_PROJECT_DIR/.bin
+   
+unit_test:
+    stage: test
+    before_script:
+        - cd $CI_PROJECT_DIR/.cache
+        - cp -R * $GOPATH/src
+        - cd $CI_PROJECT_DIR
+    dependencies:
+        - build
+    script:
+        - go test ./... -cover
