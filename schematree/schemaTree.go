@@ -193,7 +193,7 @@ func (tree *SchemaTree) Support(properties IList) uint32 {
 	return support
 }
 
-func (tree *SchemaTree) RecommendProperty(properties IList) (ranked propertyRecommendations) {
+func (tree *SchemaTree) RecommendProperty(properties IList) (ranked PropertyRecommendations) {
 
 	if len(properties) > 0 {
 
