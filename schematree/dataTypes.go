@@ -138,9 +138,9 @@ type RankedPropertyCandidate struct {
 	Probability float64
 }
 
-type propertyRecommendations []RankedPropertyCandidate
+type PropertyRecommendations []RankedPropertyCandidate
 
-func (ps propertyRecommendations) String() string {
+func (ps PropertyRecommendations) String() string {
 	s := ""
 	for _, p := range ps {
 		s += fmt.Sprintf("%v: %v\n", *p.Property.Str, p.Probability)
