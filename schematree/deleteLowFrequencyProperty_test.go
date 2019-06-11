@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-var treePath = "../10M.nt.gz.schemaTree.bin"
+var treePath = "../testdata/10M.nt.gz.schemaTree.bin"
 
 func TestManipulator(t *testing.T) {
 	b := backoffDeleteLowFrequencyItems{}
@@ -28,7 +28,6 @@ func TestManipulator(t *testing.T) {
 
 }
 
-// Test needs 10M.nt.gz.schemaTree.bin in root path
 func TestExecRecommender(t *testing.T) {
 	schema, err := LoadSchemaTree(treePath)
 
