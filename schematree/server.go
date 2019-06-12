@@ -43,7 +43,7 @@ func Serve(schema *SchemaTree, port int, runBackoffStrategy string) {
 		} else if runBackoffStrategy == "splitProperties" {
 			fmt.Println("Run with Split Properties Backoff Strategy instead of Recommender")
 			b := backoffSplitPropertySet{}
-			b.init(schema, twoSupportRangesSplitter, dummyMerger)
+			b.init(schema, twoSupportRangesSplitter, avgMerger)
 			rec = b.recommend(list)
 		} else {
 			fmt.Println("Normal Recommendation")

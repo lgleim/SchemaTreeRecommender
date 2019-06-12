@@ -1,5 +1,7 @@
 package schematree
 
+import "sort"
+
 type backoffSplitPropertySet struct {
 	tree     *SchemaTree
 	splitter func(IList) []IList                                     // Split the property list
@@ -33,6 +35,59 @@ var twoSupportRangesSplitter = func(properties IList) (sublists []IList) {
 // just chooses the first recommendation as final recommendation
 var dummyMerger = func(recommendations []PropertyRecommendations) (merged PropertyRecommendations) {
 	merged = recommendations[0]
+	return
+}
+
+// merge the recommendation sets. If a property was recommended in multiple sets then choose the maximum likelihood as returned recommendation.
+var maxMerger = func(recommendations []PropertyRecommendations) (merged PropertyRecommendations) {
+	var m map[string]RankedPropertyCandidate = make(map[string]RankedPropertyCandidate)
+
+	// compute max probaility per recommendation
+	for _, recList := range recommendations {
+		for _, rec := range recList {
+			rMap := m[*rec.Property.Str]
+			if rMap.Probability < rec.Probability {
+				m[*rec.Property.Str] = rec
+			}
+		}
+	}
+
+	// Create property recommendation list
+	merged = make([]RankedPropertyCandidate, 0, len(m))
+	for _, rec := range m {
+		merged = append(merged, rec)
+	}
+
+	//re-sort
+	sort.Slice(merged, func(i, j int) bool { return merged[i].Probability > merged[j].Probability })
+	return
+}
+
+// merge the recommendation sets and calculate the average over the recommendations.
+var avgMerger = func(recommendations []PropertyRecommendations) (merged PropertyRecommendations) {
+	// create a map that stores pointers to all the values with the same property name
+	var m map[string]([]RankedPropertyCandidate) = make(map[string]([]RankedPropertyCandidate))
+
+	// gather the recommendations per property name
+	for _, recList := range recommendations {
+		for _, rec := range recList {
+			m[*(rec.Property.Str)] = append(m[*(rec.Property.Str)], rec)
+		}
+	}
+
+	//Create property recommendation and setup recommendation list
+	merged = make([]RankedPropertyCandidate, 0, len(m))
+	for _, recList := range m {
+		var avg float64
+		rec := recList[0]
+		for _, r := range recList {
+			avg = avg + r.Probability
+		}
+		rec.Probability = avg / float64(len(recommendations)) // favors properties which ocur in only one subrecommendation -> / float64(len(recList))
+		merged = append(merged, rec)
+	}
+	//re-sort
+	sort.Slice(merged, func(i, j int) bool { return merged[i].Probability > merged[j].Probability })
 	return
 }
 
