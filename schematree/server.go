@@ -9,7 +9,7 @@ import (
 )
 
 // Serve provides a REST API for the given schematree on the given port
-func Serve(schema *SchemaTree, port int, runBackoffStrategy bool) {
+func Serve(schema *SchemaTree, port int, runBackoffStrategy string) {
 	pMap := schema.PropMap
 
 	recommender := func(w http.ResponseWriter, r *http.Request) {
@@ -32,12 +32,18 @@ func Serve(schema *SchemaTree, port int, runBackoffStrategy bool) {
 
 		t1 := time.Now()
 
+		// TODO replace this by a call of the framework, as soon as the framework exists.
 		// switch between recommender and backoff strategy
 		var rec PropertyRecommendations
-		if runBackoffStrategy {
-			fmt.Println("Run with Backoff Strategy instead of Recommender")
+		if runBackoffStrategy == "deletelowfrequency" {
+			fmt.Println("Run with Delete Low Frequency Backoff Strategy instead of Recommender")
 			b := backoffDeleteLowFrequencyItems{}
 			b.init(schema, 5, stepsizeLinear)
+			rec = b.recommend(list)
+		} else if runBackoffStrategy == "splitProperties" {
+			fmt.Println("Run with Split Properties Backoff Strategy instead of Recommender")
+			b := backoffSplitPropertySet{}
+			b.init(schema, twoSupportRangesSplitter, dummyMerger)
 			rec = b.recommend(list)
 		} else {
 			fmt.Println("Normal Recommendation")

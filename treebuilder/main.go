@@ -26,7 +26,7 @@ func main() {
 	serveRest := flag.Bool("api", false, "specifying this flag enables the rest api")
 	serveOnPort := flag.Int("port", 8080, "the port the rest interface will be served on. Use in conjunction with -api")
 	writeOutPropertyFreqs := flag.Bool("writeOutPropertyFreqs", false, "set this to write the frequency of all properties to a csv after first pass or schematree loading")
-	runBackoffStrategy := flag.Bool("backoff", false, "Run the Backoff Strategy instead of the Recommender")
+	runBackoffStrategy := flag.String("backoff", "None", "Run the Backoff Strategy instead of the Recommender Choice: 'deletelowfrequency' or 'splitProperties'")
 
 	// parse commandline arguments/flags
 	flag.Parse()

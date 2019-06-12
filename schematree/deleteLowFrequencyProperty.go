@@ -111,7 +111,6 @@ func (strat *backoffDeleteLowFrequencyItems) recommendInParrallel(sublists, remo
 func (strat *backoffDeleteLowFrequencyItems) execRecommender(items IList, removelist IList, subprocess int, c chan chanObject) {
 	// Compute Recommendation for the subset
 	recommendation := strat.tree.RecommendProperty(items)
-
 	// Delete those items which were recommended but were actually deleted before.
 	// OPT: Optimize Runtime here (O(n^2) to O(n*log(n) by first sorting and then efficient compare))
 	for _, r := range removelist {
