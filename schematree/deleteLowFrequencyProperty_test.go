@@ -8,8 +8,8 @@ import (
 //var treePath = "../testdata/10M.nt.gz.schemaTree.bin"
 
 func TestManipulator(t *testing.T) {
-	b := backoffDeleteLowFrequencyItems{}
-	b.init(nil, 5, stepsizeLinear)
+	b := BackoffDeleteLowFrequencyItems{}
+	b.init(nil, 5, StepsizeLinear)
 
 	ps := orderedList(10)
 	ls := IList{ps[0], ps[1], ps[3], ps[2], ps[0], ps[2], ps[3], ps[0]}
@@ -35,8 +35,8 @@ func TestExecRecommender(t *testing.T) {
 		t.Errorf("Schematree could not be loaded")
 	}
 	pMap := schema.PropMap
-	b := backoffDeleteLowFrequencyItems{}
-	b.init(schema, 1, stepsizeLinear)
+	b := BackoffDeleteLowFrequencyItems{}
+	b.init(schema, 1, StepsizeLinear)
 	c := make(chan chanObject, 1)
 
 	prop1, _ := pMap["http://www.wikidata.org/prop/direct/P31"]

@@ -5,7 +5,9 @@ import (
 	"math"
 )
 
-type backoffDeleteLowFrequencyItems struct {
+type stepsizeFunc func(int, int, int) int
+
+type BackoffDeleteLowFrequencyItems struct {
 	tree               *SchemaTree
 	parallelExecutions int
 	stepsize           func(int, int, int) int // Stepsize function
@@ -13,29 +15,34 @@ type backoffDeleteLowFrequencyItems struct {
 
 // step size function literals for defining how many items should be removed.
 // linear removal: f(x) = x
-var stepsizeLinear = func(size, iterator, parallelExecutions int) int {
+var StepsizeLinear = func(size, iterator, parallelExecutions int) int {
 	return iterator
 }
 
 // proportional removal up to 80% of all items
-var stepsizeProportional = func(size, iterator, parallelExecutions int) int {
+var StepsizeProportional = func(size, iterator, parallelExecutions int) int {
 	return int(math.Round(0.8 * float64(iterator) / float64(parallelExecutions) * float64(size)))
 }
 
-func (strat *backoffDeleteLowFrequencyItems) init(pTree *SchemaTree, pParallelExecutions int, pStepsize func(int, int, int) int) {
+// NewBackoffDeleteLowFrequencyItems : constructor method
+func NewBackoffDeleteLowFrequencyItems(pTree *SchemaTree, pParallelExecutions int, pStepsize stepsizeFunc) *BackoffDeleteLowFrequencyItems {
+	return &BackoffDeleteLowFrequencyItems{tree: pTree, parallelExecutions: pParallelExecutions, stepsize: pStepsize}
+}
+
+func (strat *BackoffDeleteLowFrequencyItems) init(pTree *SchemaTree, pParallelExecutions int, pStepsize func(int, int, int) int) {
 	strat.tree = pTree
 	strat.parallelExecutions = pParallelExecutions
 	strat.stepsize = pStepsize
 }
 
 //Recommend a propertyRecommendations list with the delete low Frequency Property Backoff strategy
-func (strat *backoffDeleteLowFrequencyItems) recommend(propertyList IList) (ranked PropertyRecommendations) {
+func (strat *BackoffDeleteLowFrequencyItems) Recommend(propertyList IList) (ranked PropertyRecommendations) {
 	sublists, removelists := strat.split(propertyList)
 	ranked = strat.recommendInParrallel(sublists, removelists)
 	return
 }
 
-func (strat *backoffDeleteLowFrequencyItems) split(propertyList IList) (sublists, removelists []IList) {
+func (strat *BackoffDeleteLowFrequencyItems) split(propertyList IList) (sublists, removelists []IList) {
 	//  sort the list according to support
 	propertyList.Sort()
 
@@ -59,7 +66,7 @@ func (strat *backoffDeleteLowFrequencyItems) split(propertyList IList) (sublists
 }
 
 //Delete the last i ites in the property list, by slicing. No values of the underlying array are touched. If len(propertyList) is smaller than i then an error will be returned
-func (strat *backoffDeleteLowFrequencyItems) manipulate(propertyList IList, i int) (reducedPropertyList, removedPropertyList IList, err error) {
+func (strat *BackoffDeleteLowFrequencyItems) manipulate(propertyList IList, i int) (reducedPropertyList, removedPropertyList IList, err error) {
 	if len(propertyList) < i {
 		reducedPropertyList = nil
 		err = errors.New("Invalid manipulation of the property list since property list is too short")
@@ -79,7 +86,7 @@ type chanObject struct {
 
 // executed the recommender on the sublists in parallel and returns that property recommendation on the largest subset which satisfies the used Condition (Enabler)
 // Integrating the enabler is still TODO
-func (strat *backoffDeleteLowFrequencyItems) recommendInParrallel(sublists, removelists []IList) PropertyRecommendations {
+func (strat *BackoffDeleteLowFrequencyItems) recommendInParrallel(sublists, removelists []IList) PropertyRecommendations {
 	rankedList := make([]PropertyRecommendations, len(sublists))
 
 	c := make(chan chanObject, len(sublists))
@@ -108,7 +115,7 @@ func (strat *backoffDeleteLowFrequencyItems) recommendInParrallel(sublists, remo
 	}
 }
 
-func (strat *backoffDeleteLowFrequencyItems) execRecommender(items IList, removelist IList, subprocess int, c chan chanObject) {
+func (strat *BackoffDeleteLowFrequencyItems) execRecommender(items IList, removelist IList, subprocess int, c chan chanObject) {
 	// Compute Recommendation for the subset
 	recommendation := strat.tree.RecommendProperty(items)
 	// Delete those items which were recommended but were actually deleted before.

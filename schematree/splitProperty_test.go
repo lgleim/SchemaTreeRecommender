@@ -11,15 +11,15 @@ func TestRecommender(t *testing.T) {
 		t.Errorf("Schematree could not be loaded")
 	}
 	pMap := schema.PropMap
-	b := backoffSplitPropertySet{}
-	b.init(schema, twoSupportRangesSplitter, dummyMerger)
+	b := BackoffSplitPropertySet{}
+	b.init(schema, TwoSupportRangesSplitter, DummyMerger)
 
 	prop1, _ := pMap["http://www.wikidata.org/prop/direct/P31"]
 	prop2, _ := pMap["http://www.wikidata.org/prop/direct/P21"]
 	prop3, _ := pMap["http://www.wikidata.org/prop/direct/P27"]
 	props := IList{prop1, prop2, prop3}
 
-	b.recommend(props)
+	b.Recommend(props)
 
 }
 
@@ -31,8 +31,8 @@ func TestAvgMerger(t *testing.T) {
 		t.Errorf("Schematree could not be loaded")
 	}
 	pMap := schema.PropMap
-	b := backoffSplitPropertySet{}
-	b.init(schema, twoSupportRangesSplitter, dummyMerger)
+	b := BackoffSplitPropertySet{}
+	b.init(schema, TwoSupportRangesSplitter, DummyMerger)
 
 	prop1, _ := pMap["http://www.wikidata.org/prop/direct/P31"]
 	prop2, _ := pMap["http://www.wikidata.org/prop/direct/P21"]
@@ -45,7 +45,7 @@ func TestAvgMerger(t *testing.T) {
 
 	recommendations := []PropertyRecommendations{rec1, rec2, rec3, rec4}
 
-	res := avgMerger(recommendations)
+	res := AvgMerger(recommendations)
 
 	for _, r := range res {
 		// Test values
@@ -68,8 +68,8 @@ func TestMaxMerger(t *testing.T) {
 		t.Errorf("Schematree could not be loaded")
 	}
 	pMap := schema.PropMap
-	b := backoffSplitPropertySet{}
-	b.init(schema, twoSupportRangesSplitter, dummyMerger)
+	b := BackoffSplitPropertySet{}
+	b.init(schema, TwoSupportRangesSplitter, DummyMerger)
 
 	prop1, _ := pMap["http://www.wikidata.org/prop/direct/P31"]
 	prop2, _ := pMap["http://www.wikidata.org/prop/direct/P21"]
@@ -81,7 +81,7 @@ func TestMaxMerger(t *testing.T) {
 
 	recommendations := []PropertyRecommendations{rec1, rec2, rec3}
 
-	res := maxMerger(recommendations)
+	res := MaxMerger(recommendations)
 
 	for _, r := range res {
 		// Test values
