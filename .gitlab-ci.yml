@@ -12,13 +12,13 @@ build:
         paths:
             - .cache
             - .bin
-        
+
     before_script:
         - cd $GOPATH/src
         - ln -s $CI_PROJECT_DIR
         - cd $CI_PROJECT_NAME
     script:
-        - go get ./...
+        - go get -t ./...
         - go build ./...
     after_script:
         - mkdir -p $CI_PROJECT_DIR/.cache
@@ -27,7 +27,7 @@ build:
         - cp -R * $CI_PROJECT_DIR/.cache
         - cd $GOPATH/bin
         - cp -R * $CI_PROJECT_DIR/.bin
-   
+
 unit_test:
     stage: test
     before_script:
