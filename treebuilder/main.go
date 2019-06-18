@@ -11,6 +11,7 @@ import (
 	"runtime/trace"
 
 	"recommender/schematree"
+	"recommender/server"
 )
 
 func main() {
@@ -26,7 +27,7 @@ func main() {
 	serveRest := flag.Bool("api", false, "specifying this flag enables the rest api")
 	serveOnPort := flag.Int("port", 8080, "the port the rest interface will be served on. Use in conjunction with -api")
 	writeOutPropertyFreqs := flag.Bool("writeOutPropertyFreqs", false, "set this to write the frequency of all properties to a csv after first pass or schematree loading")
-	runBackoffStrategy := flag.String("backoff", "None", "Run the Backoff Strategy instead of the Recommender Choice: 'deletelowfrequency' or 'splitProperties'")
+	strategyName := flag.String("strategy", "", "enable strategy module to customize recommender based on user input and set used strategy")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -101,8 +102,14 @@ func main() {
 		}
 	}
 
+	// TODO: Right now this part is a compromise of tacking on additional features to existing code.
+	//       Refactorization of this code is required to fully implement the strategies.
 	if *serveRest {
-		schematree.Serve(schema, *serveOnPort, *runBackoffStrategy)
+		if *strategyName != "" {
+			server.ServeCustomizedSchematree(schema, *serveOnPort, *strategyName)
+		} else {
+			schematree.Serve(schema, *serveOnPort)
+		}
 		waitForReturn()
 	}
 }
