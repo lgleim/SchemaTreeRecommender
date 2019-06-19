@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"recommender/assessment"
 	"recommender/schematree"
 	"recommender/strategy"
 )
@@ -46,8 +47,11 @@ func ServeCustomizedSchematree(schema *schematree.SchemaTree, port int, strategy
 		}
 		// fmt.Println(schema.Support(list), schema.Root.Support)
 
+		// Make an assessment of the input properties.
+		assessment := assessment.NewInstance(list, schema, true)
+
 		t1 := time.Now()
-		rec := strat.Recommend(list)
+		rec := strat.Recommend(assessment)
 		fmt.Println(time.Since(t1))
 
 		if len(rec) > 500 {
