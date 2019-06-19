@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-//var treePath = "../testdata/10M.nt.gz.schemaTree.bin"
+var treePath = "../testdata/10M.nt.gz.schemaTree.bin"
 
 func TestManipulator(t *testing.T) {
 	b := BackoffDeleteLowFrequencyItems{}

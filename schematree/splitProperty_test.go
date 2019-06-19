@@ -2,8 +2,6 @@ package schematree
 
 import "testing"
 
-var treePath = "../10M.nt.gz.schemaTree.bin"
-
 func TestRecommender(t *testing.T) {
 	schema, err := LoadSchemaTree(treePath)
 
