@@ -4,6 +4,8 @@ import (
 	"recommender/schematree"
 )
 
+var treePath = "../testdata/10M.nt.gz.schemaTree.bin"
+
 // This file is responsible for holding presets for strategy definitions.
 
 // Helper method to create a condition that always evaluates to true.
@@ -17,6 +19,33 @@ func makeAlwaysCondition() Condition {
 func makeAboveThresholdCondition(threshold int) Condition {
 	return func(props schematree.IList) bool {
 		return len(props) > threshold
+	}
+}
+
+// Helper Method to create too-many-recommendations-condition: When the standard recommender returns more than count many recommendations the condition is true, else false
+func makeTooManyRecommendationsCondition(threshold int, tree *schematree.SchemaTree) Condition {
+	return func(properties schematree.IList) bool {
+		// TODO START TEMPORARY: Load and compute standard recommendation outside of the Condition to make it MUCH more efficient and enable reuse of the standard recommendation inside other enablers.
+		recommendation := tree.RecommendProperty(properties)
+		// END TEMPORARY
+
+		if len(recommendation) > threshold {
+			return true
+		}
+		return false
+	}
+}
+
+// Helper Method to create too-less-recommendations-condition: When the standard recommender returns less than count many recommendations the condition is true, else false
+func makeTooLessRecommendationsCondition(threshold int, tree *schematree.SchemaTree) Condition {
+	return func(properties schematree.IList) bool {
+		// TODO START TEMPORARY: Load and compute standard recommendation outside of the Condition to make it MUCH more efficient and enable reuse of the standard recommendation inside other enablers.
+		recommendation := tree.RecommendProperty(properties)
+		// END TEMPORARY
+		if len(recommendation) < threshold {
+			return true
+		}
+		return false
 	}
 }
 
