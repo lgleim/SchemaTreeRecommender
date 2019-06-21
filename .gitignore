@@ -17,6 +17,7 @@
 *.out
 
 !10M.nt.gz.schemaTree.bin
+!10M.nt.gz
 
 # Binaries
 evaluation/evaluation
