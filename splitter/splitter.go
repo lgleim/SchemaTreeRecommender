@@ -8,10 +8,10 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"recommender/schematree"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
-	"recommender/schematree"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -128,7 +128,7 @@ func main() {
 		// extract subject
 		_, token = firstWord(line)
 
-		if len(token) == 0 || token[0] == '#' { // line is a comment
+		if len(token) == 0 || token[0] == '#' || strings.Contains(string(token), "Special:EntityData") { // line is a comment
 			continue
 		}
 
