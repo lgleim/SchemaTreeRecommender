@@ -49,7 +49,7 @@ type IItem struct {
 	Str              *string
 	TotalCount       uint64
 	SortOrder        uint32
-	traversalPointer *schemaNode // node traversal pointer
+	traversalPointer *SchemaNode // node traversal pointer
 }
 
 func (p *IItem) increment() {

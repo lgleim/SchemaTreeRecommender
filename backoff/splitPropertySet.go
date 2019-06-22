@@ -1,20 +1,24 @@
-package schematree
+package backoff
 
-import "sort"
+import (
+	ST "recommender/schematree"
+	"sort"
+)
 
-type splitterFunc func(IList) []IList
-type mergerFunc func([]PropertyRecommendations) PropertyRecommendations
+type splitterFunc func(ST.IList) []ST.IList
+type mergerFunc func([]ST.PropertyRecommendations) ST.PropertyRecommendations
 
+// BackoffSplitPropertySet holds all information necessary to execute the algorithm
 type BackoffSplitPropertySet struct {
-	tree     *SchemaTree
-	splitter func(IList) []IList                                     // Split the property list
-	merger   func([]PropertyRecommendations) PropertyRecommendations // Merge the property list
+	tree     *ST.SchemaTree
+	splitter func(ST.IList) []ST.IList                                     // Split the property list
+	merger   func([]ST.PropertyRecommendations) ST.PropertyRecommendations // Merge the property list
 }
 
 //splits into two sublists. "Equal" mixture of high and low support properties in both sets.
-var EverySecondItemSplitter = func(properties IList) (sublists []IList) {
+var EverySecondItemSplitter = func(properties ST.IList) (sublists []ST.IList) {
 	properties.Sort()
-	sublists = make([]IList, 2, 2)
+	sublists = make([]ST.IList, 2, 2)
 	for i, p := range properties {
 		if i%2 == 0 {
 			sublists[0] = append(sublists[0], p)
@@ -26,9 +30,9 @@ var EverySecondItemSplitter = func(properties IList) (sublists []IList) {
 }
 
 // splits the data set into two equally sized sublists, one containing all the high support properties, and one all the low support properties.
-var TwoSupportRangesSplitter = func(properties IList) (sublists []IList) {
+var TwoSupportRangesSplitter = func(properties ST.IList) (sublists []ST.IList) {
 	properties.Sort()
-	sublists = make([]IList, 2, 2)
+	sublists = make([]ST.IList, 2, 2)
 	mid := int(float64(len(properties)) / 2.0)
 	sublists[0] = properties[mid:]
 	sublists[1] = properties[:mid]
@@ -36,14 +40,14 @@ var TwoSupportRangesSplitter = func(properties IList) (sublists []IList) {
 }
 
 // just chooses the first recommendation as final recommendation
-var DummyMerger = func(recommendations []PropertyRecommendations) (merged PropertyRecommendations) {
+var DummyMerger = func(recommendations []ST.PropertyRecommendations) (merged ST.PropertyRecommendations) {
 	merged = recommendations[0]
 	return
 }
 
 // merge the recommendation sets. If a property was recommended in multiple sets then choose the maximum likelihood as returned recommendation.
-var MaxMerger = func(recommendations []PropertyRecommendations) (merged PropertyRecommendations) {
-	var m map[string]RankedPropertyCandidate = make(map[string]RankedPropertyCandidate)
+var MaxMerger = func(recommendations []ST.PropertyRecommendations) (merged ST.PropertyRecommendations) {
+	var m map[string]ST.RankedPropertyCandidate = make(map[string]ST.RankedPropertyCandidate)
 
 	// compute max probaility per recommendation
 	for _, recList := range recommendations {
@@ -56,7 +60,7 @@ var MaxMerger = func(recommendations []PropertyRecommendations) (merged Property
 	}
 
 	// Create property recommendation list
-	merged = make([]RankedPropertyCandidate, 0, len(m))
+	merged = make([]ST.RankedPropertyCandidate, 0, len(m))
 	for _, rec := range m {
 		merged = append(merged, rec)
 	}
@@ -67,9 +71,9 @@ var MaxMerger = func(recommendations []PropertyRecommendations) (merged Property
 }
 
 // merge the recommendation sets and calculate the average over the recommendations.
-var AvgMerger = func(recommendations []PropertyRecommendations) (merged PropertyRecommendations) {
+var AvgMerger = func(recommendations []ST.PropertyRecommendations) (merged ST.PropertyRecommendations) {
 	// create a map that stores pointers to all the values with the same property name
-	var m map[string]([]RankedPropertyCandidate) = make(map[string]([]RankedPropertyCandidate))
+	var m map[string]([]ST.RankedPropertyCandidate) = make(map[string]([]ST.RankedPropertyCandidate))
 
 	// gather the recommendations per property name
 	for _, recList := range recommendations {
@@ -79,7 +83,7 @@ var AvgMerger = func(recommendations []PropertyRecommendations) (merged Property
 	}
 
 	//Create property recommendation and setup recommendation list
-	merged = make([]RankedPropertyCandidate, 0, len(m))
+	merged = make([]ST.RankedPropertyCandidate, 0, len(m))
 	for _, recList := range m {
 		var avg float64
 		rec := recList[0]
@@ -95,19 +99,19 @@ var AvgMerger = func(recommendations []PropertyRecommendations) (merged Property
 }
 
 // NewBackoffSplitPropertySet : constructor method
-func NewBackoffSplitPropertySet(pTree *SchemaTree, pSplitter splitterFunc, pMerger mergerFunc) *BackoffSplitPropertySet {
+func NewBackoffSplitPropertySet(pTree *ST.SchemaTree, pSplitter splitterFunc, pMerger mergerFunc) *BackoffSplitPropertySet {
 	return &BackoffSplitPropertySet{tree: pTree, splitter: pSplitter, merger: pMerger}
 }
 
 // init the backoff strategy. needed ist a schematree, a splitter function that splits the property list into sublists, and a merger which then merges the recommendations on the sublists
-func (strat *BackoffSplitPropertySet) init(pTree *SchemaTree, pSplitter func(IList) []IList, pMerger func([]PropertyRecommendations) PropertyRecommendations) {
+func (strat *BackoffSplitPropertySet) init(pTree *ST.SchemaTree, pSplitter func(ST.IList) []ST.IList, pMerger func([]ST.PropertyRecommendations) ST.PropertyRecommendations) {
 	strat.tree = pTree
 	strat.splitter = pSplitter
 	strat.merger = pMerger
 }
 
 //Recommend a propertyRecommendations list with the delete low Frequency Property Backoff strategy
-func (strat *BackoffSplitPropertySet) Recommend(propertyList IList) (ranked PropertyRecommendations) {
+func (strat *BackoffSplitPropertySet) Recommend(propertyList ST.IList) (ranked ST.PropertyRecommendations) {
 	sublists := strat.splitter(propertyList)
 	recommendations := strat.recommendInPrallel(sublists)
 	ranked = strat.merger(recommendations)
@@ -115,14 +119,14 @@ func (strat *BackoffSplitPropertySet) Recommend(propertyList IList) (ranked Prop
 }
 
 // run several instances of the recommender in parallel on the sublists. Result are several recommendations
-func (strat *BackoffSplitPropertySet) recommendInPrallel(sublists []IList) (recommendations []PropertyRecommendations) {
+func (strat *BackoffSplitPropertySet) recommendInPrallel(sublists []ST.IList) (recommendations []ST.PropertyRecommendations) {
 
-	recommendations = make([]PropertyRecommendations, len(sublists), len(sublists))
+	recommendations = make([]ST.PropertyRecommendations, len(sublists), len(sublists))
 
 	// merge all other recommendations as 'removed recommendations'
 	// Maybe not the most efficient way...
-	mergeRemoved := func(sublists []IList, current int) (merged IList) {
-		merged = make(IList, 0, 0)
+	mergeRemoved := func(sublists []ST.IList, current int) (merged ST.IList) {
+		merged = make(ST.IList, 0, 0)
 		for i, list := range sublists {
 			// leave out currently views sublist
 			if i != current {
@@ -150,7 +154,7 @@ func (strat *BackoffSplitPropertySet) recommendInPrallel(sublists []IList) (reco
 }
 
 // TODO WHEN RESTRUCTURE: file deleteLowFrequencyProperty got the exactly same function! SHARE!
-func (strat *BackoffSplitPropertySet) execRecommender(items IList, removelist IList, subprocess int, c chan chanObject) {
+func (strat *BackoffSplitPropertySet) execRecommender(items ST.IList, removelist ST.IList, subprocess int, c chan chanObject) {
 	// Compute Recommendation for the subset
 	recommendation := strat.tree.RecommendProperty(items)
 	// Delete those items which were recommended but were actually deleted before.
@@ -158,8 +162,8 @@ func (strat *BackoffSplitPropertySet) execRecommender(items IList, removelist IL
 	for _, r := range removelist {
 		for i, item := range recommendation {
 			if *item.Property.Str == *r.Str { // https://yourbasic.org/golang/delete-element-slice/
-				copy(recommendation[i:], recommendation[i+1:])                    // Shift recommendation[i+1:] left one index.
-				recommendation[len(recommendation)-1] = RankedPropertyCandidate{} // Erase last element (write zero value).
+				copy(recommendation[i:], recommendation[i+1:])                       // Shift recommendation[i+1:] left one index.
+				recommendation[len(recommendation)-1] = ST.RankedPropertyCandidate{} // Erase last element (write zero value).
 				recommendation = recommendation[:len(recommendation)-1]
 				break
 			}
