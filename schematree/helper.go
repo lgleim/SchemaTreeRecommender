@@ -25,8 +25,8 @@ func bToMb(b uint64) float64 {
 
 func countTreeNodes(schema *SchemaTree) {
 	var nodeCount uint64
-	var countNodes func(node *schemaNode)
-	countNodes = func(node *schemaNode) {
+	var countNodes func(node *SchemaNode)
+	countNodes = func(node *SchemaNode) {
 		nodeCount++
 		// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 		for _, child := range node.Children {

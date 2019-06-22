@@ -22,6 +22,7 @@
 !10M.nt_1in2_train.gz
 
 # Binaries
+recommender
 evaluation/evaluation
 sameAsExtractor/sameAsExtractor
 sameAsReducer/sameAsReducer

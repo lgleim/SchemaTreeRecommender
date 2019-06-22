@@ -9,7 +9,7 @@ import "testing"
 //     ...
 // }
 
-func emptyRootNodeTest(root schemaNode, t *testing.T) {
+func emptyRootNodeTest(root SchemaNode, t *testing.T) {
 	if root.ID == nil {
 		t.Error("schemaNode ID is nil")
 	}

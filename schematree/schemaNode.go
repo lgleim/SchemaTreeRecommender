@@ -11,22 +11,22 @@ import (
 
 // Nodes of the Schema FP-Tree
 // TODO: determine wether to use hash-maps or arrays to store child notes in the tree
-type schemaNode struct {
+type SchemaNode struct {
 	ID     *IItem
-	parent *schemaNode
-	// Children map[*iItem]*schemaNode
-	Children   []*schemaNode
-	nextSameID *schemaNode       // node traversal pointer
+	parent *SchemaNode
+	// Children map[*iItem]*SchemaNode
+	Children   []*SchemaNode
+	nextSameID *SchemaNode       // node traversal pointer
 	Support    uint32            // total frequency of the node in the path
 	Types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
 }
 
-func newRootNode(pMap propMap) schemaNode {
-	// return schemaNode{newRootiItem(), nil, make(map[*iItem]*schemaNode), nil, 0, nil}
-	return schemaNode{pMap.get("root"), nil, []*schemaNode{}, nil, 0, nil}
+func newRootNode(pMap propMap) SchemaNode {
+	// return SchemaNode{newRootiItem(), nil, make(map[*iItem]*SchemaNode), nil, 0, nil}
+	return SchemaNode{pMap.get("root"), nil, []*SchemaNode{}, nil, 0, nil}
 }
 
-func (node *schemaNode) writeGob(e *gob.Encoder) error {
+func (node *SchemaNode) writeGob(e *gob.Encoder) error {
 	// ID
 	err := e.Encode(node.ID.SortOrder)
 	if err != nil {
@@ -60,7 +60,7 @@ func (node *schemaNode) writeGob(e *gob.Encoder) error {
 	return err
 }
 
-func (node *schemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintptr]*iType) error {
+func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintptr]*iType) error {
 	// function scoping to allow for garbage collection
 	// err := func() error {
 	// ID
@@ -87,23 +87,23 @@ func (node *schemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintp
 	if err != nil {
 		return err
 	}
-	node.Children = make([]*schemaNode, length, length)
-	// node.Children = make(map[*iItem]*schemaNode)
+	node.Children = make([]*SchemaNode, length, length)
+	// node.Children = make(map[*iItem]*SchemaNode)
 
 	// 	return nil
 	// }()
 	for i := range node.Children {
-		node.Children[i] = &schemaNode{nil, node, nil, nil, 0, nil}
+		node.Children[i] = &SchemaNode{nil, node, nil, nil, 0, nil}
 		err = node.Children[i].decodeGob(d, props, tMap)
 		// for i := 0; i < length; i++ {
-		// 	child := &schemaNode{nil, node, nil, nil, 0, nil}
+		// 	child := &SchemaNode{nil, node, nil, nil, 0, nil}
 		// 	err = child.decodeGob(d, props, tMap)
 		if err != nil {
 			return err
 		}
 		// node.Children[child.ID] = child
 	}
-	// // fixing sort order of schemaNode.children arrays (sorted by *changed* pointer addresses)
+	// // fixing sort order of SchemaNode.children arrays (sorted by *changed* pointer addresses)
 	// sort.Slice(node.Children, func(i, j int) bool {
 	// 	return uintptr(unsafe.Pointer(node.Children[i].ID)) < uintptr(unsafe.Pointer(node.Children[j].ID))
 	// })
@@ -125,19 +125,19 @@ func (node *schemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintp
 	return nil
 }
 
-func (node *schemaNode) incrementSupport() {
+func (node *SchemaNode) incrementSupport() {
 	atomic.AddUint32(&node.Support, 1)
 }
 
-/// structures & logic for handling types annotations in schemaNodes
+/// structures & logic for handling types annotations in SchemaNodes
 var typeChan chan struct {
-	node  *schemaNode
+	node  *SchemaNode
 	types []*iType
 }
 
-func (node *schemaNode) insertTypes(types []*iType) {
+func (node *SchemaNode) insertTypes(types []*iType) {
 	typeChan <- struct {
-		node  *schemaNode
+		node  *SchemaNode
 		types []*iType
 	}{node, types}
 }
@@ -163,7 +163,7 @@ const lockPrime = 97 // arbitrary prime number
 var globalItemLocks [lockPrime]*sync.Mutex
 var globalNodeLocks [lockPrime]*sync.RWMutex
 
-func (node *schemaNode) getChild(term *IItem) *schemaNode {
+func (node *SchemaNode) getChild(term *IItem) *SchemaNode {
 	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
 	// child, ok := node.Children[term]
 	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
@@ -180,7 +180,7 @@ func (node *schemaNode) getChild(term *IItem) *schemaNode {
 
 	// 	// child not found. Create a new one...
 	// 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
-	// 	child = &schemaNode{term, node, make(map[*iItem]*schemaNode), term.traversalPointer, 0, nil}
+	// 	child = &SchemaNode{term, node, make(map[*iItem]*SchemaNode), term.traversalPointer, 0, nil}
 	// 	term.traversalPointer = child
 	// 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
 
@@ -227,7 +227,7 @@ func (node *schemaNode) getChild(term *IItem) *schemaNode {
 	// child not found, but i is the index where it would be inserted.
 	// create a new one...
 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
-	newChild := &schemaNode{term, node, []*schemaNode{}, term.traversalPointer, 0, nil}
+	newChild := &SchemaNode{term, node, []*SchemaNode{}, term.traversalPointer, 0, nil}
 	term.traversalPointer = newChild
 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
 
@@ -243,7 +243,7 @@ func (node *schemaNode) getChild(term *IItem) *schemaNode {
 
 // internal! propertyPath *MUST* be sorted in sortOrder (i.e. descending support)
 // thread-safe!
-func (node *schemaNode) prefixContains(propertyPath IList) bool {
+func (node *SchemaNode) prefixContains(propertyPath IList) bool {
 	nextP := len(propertyPath) - 1                         // index of property expected to be seen next
 	for cur := node; cur.parent != nil; cur = cur.parent { // walk from leaf towards root
 
@@ -260,7 +260,7 @@ func (node *schemaNode) prefixContains(propertyPath IList) bool {
 	return false
 }
 
-func (node *schemaNode) graphViz(minSup uint32) string {
+func (node *SchemaNode) graphViz(minSup uint32) string {
 	s := ""
 	// // draw horizontal links
 	// if node.nextSameID != nil && node.nextSameID.Support >= minSup {
@@ -283,6 +283,6 @@ func (node *schemaNode) graphViz(minSup uint32) string {
 	return s
 }
 
-// func (node *schemaNode) String() string {
+// func (node *SchemaNode) String() string {
 // 	return fmt.Sprintf("\"%v (%p id:%p str:%p)\"", *node.ID.Str, node, node.ID, node.ID.Str)
 // }

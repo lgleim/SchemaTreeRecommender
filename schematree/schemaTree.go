@@ -16,7 +16,7 @@ import (
 type SchemaTree struct {
 	PropMap propMap
 	TypeMap typeMap
-	Root    schemaNode
+	Root    SchemaNode
 	MinSup  uint32
 }
 
@@ -49,7 +49,7 @@ func (tree *SchemaTree) init() {
 
 	if typeChan == nil {
 		typeChan = make(chan struct {
-			node  *schemaNode
+			node  *SchemaNode
 			types []*iType
 		})
 		go typeInsertionWorker()
@@ -203,8 +203,8 @@ func (tree *SchemaTree) RecommendProperty(properties IList) (ranked PropertyReco
 
 		candidates := make(map[*IItem]uint32)
 
-		var makeCandidates func(startNode *schemaNode)
-		makeCandidates = func(startNode *schemaNode) { // head hunter function ;)
+		var makeCandidates func(startNode *SchemaNode)
+		makeCandidates = func(startNode *SchemaNode) { // head hunter function ;)
 			for _, child := range startNode.Children {
 				candidates[child.ID] += child.Support
 				makeCandidates(child)
@@ -267,8 +267,8 @@ func (tree *SchemaTree) RecommendProperty(properties IList) (ranked PropertyReco
 
 // 	candidates := make(map[*iItem]uint32)
 
-// 	var makeCandidates func(startNode *schemaNode)
-// 	makeCandidates = func(startNode *schemaNode) { // head hunter function ;)
+// 	var makeCandidates func(startNode *SchemaNode)
+// 	makeCandidates = func(startNode *SchemaNode) { // head hunter function ;)
 // 		for _, child := range startNode.children {
 // 			candidates[child.ID] += child.support
 // 			makeCandidates(child)
@@ -479,6 +479,8 @@ func (tree *SchemaTree) firstPass(fileName string, firstN uint64) {
 		// 	*schema = *tmp
 		// 	fmt.Printf("%v properties, %v types\n", len(tmp.propMap), len(tmp.typeMap))
 		// } else {
+
+		// TODO: Think whether its OK to re-use existing files on build step (maybe with optional arg)
 		tmp, err := LoadSchemaTree(fileName + ".firstPass.bin")
 		if err != nil {
 			log.Fatalln(err)

@@ -1,14 +1,15 @@
-package schematree
+package backoff
 
 import (
 	"errors"
 	"math"
+	ST "recommender/schematree"
 )
 
 type stepsizeFunc func(int, int, int) int
 
 type BackoffDeleteLowFrequencyItems struct {
-	tree               *SchemaTree
+	tree               *ST.SchemaTree
 	parallelExecutions int
 	stepsize           func(int, int, int) int // Stepsize function
 }
@@ -25,30 +26,30 @@ var StepsizeProportional = func(size, iterator, parallelExecutions int) int {
 }
 
 // NewBackoffDeleteLowFrequencyItems : constructor method
-func NewBackoffDeleteLowFrequencyItems(pTree *SchemaTree, pParallelExecutions int, pStepsize stepsizeFunc) *BackoffDeleteLowFrequencyItems {
+func NewBackoffDeleteLowFrequencyItems(pTree *ST.SchemaTree, pParallelExecutions int, pStepsize stepsizeFunc) *BackoffDeleteLowFrequencyItems {
 	return &BackoffDeleteLowFrequencyItems{tree: pTree, parallelExecutions: pParallelExecutions, stepsize: pStepsize}
 }
 
-func (strat *BackoffDeleteLowFrequencyItems) init(pTree *SchemaTree, pParallelExecutions int, pStepsize func(int, int, int) int) {
+func (strat *BackoffDeleteLowFrequencyItems) init(pTree *ST.SchemaTree, pParallelExecutions int, pStepsize func(int, int, int) int) {
 	strat.tree = pTree
 	strat.parallelExecutions = pParallelExecutions
 	strat.stepsize = pStepsize
 }
 
 //Recommend a propertyRecommendations list with the delete low Frequency Property Backoff strategy
-func (strat *BackoffDeleteLowFrequencyItems) Recommend(propertyList IList) (ranked PropertyRecommendations) {
+func (strat *BackoffDeleteLowFrequencyItems) Recommend(propertyList ST.IList) (ranked ST.PropertyRecommendations) {
 	sublists, removelists := strat.split(propertyList)
 	ranked = strat.recommendInParrallel(sublists, removelists)
 	return
 }
 
-func (strat *BackoffDeleteLowFrequencyItems) split(propertyList IList) (sublists, removelists []IList) {
+func (strat *BackoffDeleteLowFrequencyItems) split(propertyList ST.IList) (sublists, removelists []ST.IList) {
 	//  sort the list according to support
 	propertyList.Sort()
 
 	// Create sublists and removelists to track the created sublists and what was removed
-	sublists = make([]IList, strat.parallelExecutions, strat.parallelExecutions)
-	removelists = make([]IList, strat.parallelExecutions, strat.parallelExecutions)
+	sublists = make([]ST.IList, strat.parallelExecutions, strat.parallelExecutions)
+	removelists = make([]ST.IList, strat.parallelExecutions, strat.parallelExecutions)
 
 	//create the subsets according to the sebsize function. When the stepsize exeeded the limit of the list no sublist for that stepsize will be constructed.
 	for i := 0; i < strat.parallelExecutions; i++ {
@@ -66,7 +67,7 @@ func (strat *BackoffDeleteLowFrequencyItems) split(propertyList IList) (sublists
 }
 
 //Delete the last i ites in the property list, by slicing. No values of the underlying array are touched. If len(propertyList) is smaller than i then an error will be returned
-func (strat *BackoffDeleteLowFrequencyItems) manipulate(propertyList IList, i int) (reducedPropertyList, removedPropertyList IList, err error) {
+func (strat *BackoffDeleteLowFrequencyItems) manipulate(propertyList ST.IList, i int) (reducedPropertyList, removedPropertyList ST.IList, err error) {
 	if len(propertyList) < i {
 		reducedPropertyList = nil
 		err = errors.New("Invalid manipulation of the property list since property list is too short")
@@ -80,14 +81,14 @@ func (strat *BackoffDeleteLowFrequencyItems) manipulate(propertyList IList, i in
 
 // Object which is used to communicate between this goroutine here and the started subroutines.
 type chanObject struct {
-	recommendations PropertyRecommendations
+	recommendations ST.PropertyRecommendations
 	subprocess      int
 }
 
 // executed the recommender on the sublists in parallel and returns that property recommendation on the largest subset which satisfies the used Condition (Enabler)
 // Integrating the enabler is still TODO
-func (strat *BackoffDeleteLowFrequencyItems) recommendInParrallel(sublists, removelists []IList) PropertyRecommendations {
-	rankedList := make([]PropertyRecommendations, len(sublists))
+func (strat *BackoffDeleteLowFrequencyItems) recommendInParrallel(sublists, removelists []ST.IList) ST.PropertyRecommendations {
+	rankedList := make([]ST.PropertyRecommendations, len(sublists))
 
 	c := make(chan chanObject, len(sublists))
 	// Start recommenders
@@ -115,7 +116,7 @@ func (strat *BackoffDeleteLowFrequencyItems) recommendInParrallel(sublists, remo
 	}
 }
 
-func (strat *BackoffDeleteLowFrequencyItems) execRecommender(items IList, removelist IList, subprocess int, c chan chanObject) {
+func (strat *BackoffDeleteLowFrequencyItems) execRecommender(items ST.IList, removelist ST.IList, subprocess int, c chan chanObject) {
 	// Compute Recommendation for the subset
 	recommendation := strat.tree.RecommendProperty(items)
 	// Delete those items which were recommended but were actually deleted before.
@@ -123,8 +124,8 @@ func (strat *BackoffDeleteLowFrequencyItems) execRecommender(items IList, remove
 	for _, r := range removelist {
 		for i, item := range recommendation {
 			if *item.Property.Str == *r.Str { // https://yourbasic.org/golang/delete-element-slice/
-				copy(recommendation[i:], recommendation[i+1:])                    // Shift recommendation[i+1:] left one index.
-				recommendation[len(recommendation)-1] = RankedPropertyCandidate{} // Erase last element (write zero value).
+				copy(recommendation[i:], recommendation[i+1:])                       // Shift recommendation[i+1:] left one index.
+				recommendation[len(recommendation)-1] = ST.RankedPropertyCandidate{} // Erase last element (write zero value).
 				recommendation = recommendation[:len(recommendation)-1]
 				break
 			}

@@ -4,6 +4,7 @@ package strategy
 
 import (
 	"recommender/assessment"
+	"recommender/backoff"
 	"recommender/schematree"
 )
 
@@ -59,7 +60,7 @@ func makeAssessmentAwareDirectProcedure() Procedure {
 
 // Helper method to create the 'deletelowfrequency' backoff procedure.
 func makeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int) Procedure {
-	b := schematree.NewBackoffDeleteLowFrequencyItems(tree, parExecs, schematree.StepsizeLinear)
+	b := backoff.NewBackoffDeleteLowFrequencyItems(tree, parExecs, backoff.StepsizeLinear)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
 	}
@@ -68,14 +69,14 @@ func makeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int) 
 // Helper method to create the 'splitproperty' backoff procedure.
 // TODO: This method could be changed to allow for customized splitter and merger functions.
 func makeSplitPropertyProcedure(tree *schematree.SchemaTree) Procedure {
-	b := schematree.NewBackoffSplitPropertySet(tree, schematree.TwoSupportRangesSplitter, schematree.AvgMerger)
+	b := backoff.NewBackoffSplitPropertySet(tree, backoff.TwoSupportRangesSplitter, backoff.AvgMerger)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
 	}
 }
 
-// MakePresetStrategy : Build a preset strategy that is hard-coded.
-func MakePresetStrategy(name string, tree *schematree.SchemaTree) Workflow {
+// MakePresetWorkflow : Build a preset strategy that is hard-coded.
+func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	wf := Workflow{}
 
 	switch name {
@@ -127,5 +128,5 @@ func MakePresetStrategy(name string, tree *schematree.SchemaTree) Workflow {
 		panic("Given strategy name does not exist as a preset.")
 	}
 
-	return wf
+	return &wf
 }
