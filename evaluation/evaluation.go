@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	"gonum.org/v1/plot"
 	"gonum.org/v1/plot/plotter"
@@ -105,67 +106,7 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		// memoize empty set recommendations
-		setSup := float64(tree.Root.Support) // empty set occured in all transactions
-		emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
-		for _, prop := range tree.PropMap {
-			emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
-				Property:    prop,
-				Probability: float64(prop.TotalCount) / setSup,
-			}
-		}
-
-		var wg sync.WaitGroup
-		results := make(chan evalResult, 1000) // collect eval results via channel
-
-		// evaluate the rank the recommender assigns the left out property
-		evaluate := func(properties schematree.IList, leftOut *schematree.IItem) {
-			var recs []schematree.RankedPropertyCandidate
-			if len(properties) == 0 {
-				recs = emptyRecs
-			} else {
-				recs = tree.RecommendProperty(properties)
-			}
-			for i, r := range recs {
-				if r.Property == leftOut { // found item to recover
-					for i > 0 && recs[i-1].Probability == r.Probability {
-						i--
-					}
-					results <- evalResult{uint16(len(properties)), uint32(i)}
-					break
-				}
-			}
-		}
-
-		handler := func(s *schematree.SubjectSummary) {
-			properties := make(schematree.IList, 0, len(s.Properties))
-			for p := range s.Properties {
-				properties = append(properties, p)
-			}
-			properties.Sort()
-
-			// take out one property from the list at a time and determine in which position it will be recommended again
-			tmp := make(schematree.IList, len(properties)-1, len(properties)-1)
-			copy(tmp, properties[1:])
-			for i := range tmp {
-				evaluate(tmp, properties[i])
-				tmp[i] = properties[i]
-			}
-			evaluate(tmp, properties[len(properties)-1])
-		}
-
-		go func() {
-			wg.Add(1)
-			for res := range results {
-				stats[res.setSize] = append(stats[res.setSize], res.position)
-			}
-			wg.Done()
-		}()
-
-		subjectCount := schematree.SubjectSummaryReader(*testFile, tree.PropMap, tree.TypeMap, handler, 0)
-		logr.Printf("\nEvaluation with total of %v subject sets!\n", subjectCount)
-		close(results)
-		wg.Wait()
+		stats, _ = evaluation(tree, testFile)
 
 		f, _ := os.Create(*testFile + ".eval")
 		e := gob.NewEncoder(f)
@@ -173,23 +114,186 @@ func main() {
 		e.Encode(stats)
 		f.Close()
 	}
-
-	makeStatistics(stats, *testFile)
+	writeStatisticsToFile(stats, *testFile)
 }
 
 type evalResult struct {
-	setSize  uint16
-	position uint32
+	setSize   uint16
+	position  uint32
+	resources *evalResources
+}
+type evalResources struct {
+	duration         int64
+	memoryAllocation uint64
+}
+
+func evaluation(tree *schematree.SchemaTree, testFile *string) (stats map[uint16][]uint32, resources map[uint16][]*evalResources) {
+	resources = make(map[uint16][]*evalResources)
+	stats = make(map[uint16][]uint32)
+
+	// memoize empty set recommendations
+	setSup := float64(tree.Root.Support) // empty set occured in all transactions
+	emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+	for _, prop := range tree.PropMap {
+		emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
+			Property:    prop,
+			Probability: float64(prop.TotalCount) / setSup,
+		}
+	}
+
+	var wg sync.WaitGroup
+	results := make(chan evalResult, 1000) // collect eval results via channel
+
+	// evaluate the rank the recommender assigns the left out property
+	evaluate := func(properties schematree.IList, leftOut *schematree.IItem) {
+		var duration int64
+		var recs []schematree.RankedPropertyCandidate
+		var m runtime.MemStats
+		var resource evalResources
+		if len(properties) == 0 {
+			recs = emptyRecs
+		} else {
+			start := time.Now()
+			recs = tree.RecommendProperty(properties)
+			duration = time.Since(start).Nanoseconds()
+			runtime.ReadMemStats(&m)
+			resource = evalResources{duration, m.Alloc / 1024 / 1024}
+		}
+		for i, r := range recs {
+			if r.Property == leftOut { // found item to recover
+				for i > 0 && recs[i-1].Probability == r.Probability {
+					i--
+				}
+				results <- evalResult{uint16(len(properties)), uint32(i), &resource}
+				break
+			}
+		}
+	}
+
+	handler := func(s *schematree.SubjectSummary) {
+		properties := make(schematree.IList, 0, len(s.Properties))
+		for p := range s.Properties {
+			properties = append(properties, p)
+		}
+		properties.Sort()
+
+		// take out one property from the list at a time and determine in which position it will be recommended again
+		tmp := make(schematree.IList, len(properties)-1, len(properties)-1)
+		copy(tmp, properties[1:])
+		for i := range tmp {
+			evaluate(tmp, properties[i])
+			tmp[i] = properties[i]
+		}
+		evaluate(tmp, properties[len(properties)-1])
+	}
+
+	go func() {
+		wg.Add(1)
+		for res := range results {
+			stats[res.setSize] = append(stats[res.setSize], res.position)
+			resources[res.setSize] = append(resources[res.setSize], res.resources)
+		}
+		wg.Done()
+	}()
+
+	schematree.SubjectSummaryReader(*testFile, tree.PropMap, tree.TypeMap, handler, 0)
+	close(results)
+	wg.Wait()
+
+	var lenght uint32
+	for _, rank_list := range stats {
+		lenght += uint32(len(rank_list))
+	}
+	total := make([]uint32, 0, lenght)
+	total_res := make([]*evalResources, 0, lenght)
+
+	for _, rank_list := range stats {
+		total = append(total, rank_list...)
+	}
+	for _, rank_list := range resources {
+		total_res = append(total_res, rank_list...)
+	}
+	stats[0] = total
+	resources[0] = total_res
+
+	return stats, resources
+}
+
+func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResources) (statistics []evalSummary) {
+	// compute statistics
+	duration := make(map[uint16]float64)
+	memoryAllocation := make(map[uint16]float64)
+
+	for k, v := range resources {
+		for _, res := range v {
+			duration[k] = duration[k] + float64(res.duration)
+			memoryAllocation[k] = memoryAllocation[k] + float64(res.memoryAllocation)
+		}
+	}
+	for k, v := range resources {
+		duration[k] = duration[k] / float64(len(v))
+		memoryAllocation[k] = memoryAllocation[k] / float64(len(v))
+	}
+
+	statistics = make([]evalSummary, len(stats))
+	setLens := make([]int, 0, len(stats))
+	for setLen := range stats {
+		setLens = append(setLens, int(setLen))
+	}
+	sort.Ints(setLens)
+	for i, setLen := range setLens {
+		v := stats[uint16(setLen)]
+		if len(v) == 0 {
+			continue
+		}
+		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
+
+		var sum uint64
+		var mean, meanSquare, median, variance, top1, top5, top10 float64
+		l := float64(len(v))
+
+		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / float64(len(v))
+		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 5 })) / float64(len(v))
+		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 10 })) / float64(len(v))
+
+		if len(v) == 1 {
+			mean = float64(v[0])
+			median = mean
+			variance = 0
+		} else {
+			if len(v)%2 != 0 {
+				median = float64(v[len(v)/2])
+			} else {
+				median = (float64(v[len(v)/2-1]) + float64(v[len(v)/2])) / 2.0
+			}
+
+			for _, x := range v {
+				sum += uint64(x)
+				meanSquare += float64(x) * float64(x) / l
+			}
+			mean = float64(sum) / l
+			variance = meanSquare - (mean * mean)
+		}
+		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), len(v) / (setLen + 1), duration[uint16(setLen)], memoryAllocation[uint16(setLen)]}
+	}
+	return
 }
 
 type evalSummary struct {
-	setSize  uint16
-	median   float64
-	mean     float64
-	variance float64
+	setSize          int
+	median           float64
+	mean             float64
+	variance         float64
+	top1             float64
+	top5             float64
+	top10            float64
+	sampleSize       int
+	subjectCount     int
+	duration         float64
+	memoryAllocation float64
 }
 
-func makeStatistics(stats map[uint16][]uint32, fileName string) (output string) {
+func writeStatisticsToFile(stats map[uint16][]uint32, fileName string) (output string) {
 	// compute statistics
 	output = fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects")
 	setLens := make([]int, 0, len(stats))
