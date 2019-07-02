@@ -223,6 +223,7 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 	// compute statistics
 	duration := make(map[uint16]float64)
 	memoryAllocation := make(map[uint16]float64)
+	var averageSize float64
 
 	for k, v := range resources {
 		for _, res := range v {
@@ -240,6 +241,12 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 	for setLen := range stats {
 		setLens = append(setLens, int(setLen))
 	}
+
+	for _, value := range setLens {
+		averageSize += float64(value)
+	}
+	averageSize = averageSize / float64(len(setLens))
+
 	sort.Ints(setLens)
 	for i, setLen := range setLens {
 		v := stats[uint16(setLen)]
@@ -249,7 +256,7 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
 
 		var sum uint64
-		var mean, meanSquare, median, variance, top1, top5, top10 float64
+		var mean, meanSquare, median, variance, top1, top5, top10, subjects, worst5average float64
 		l := float64(len(v))
 
 		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / float64(len(v))
@@ -260,6 +267,7 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 			mean = float64(v[0])
 			median = mean
 			variance = 0
+			worst5average = mean
 		} else {
 			if len(v)%2 != 0 {
 				median = float64(v[len(v)/2])
@@ -273,8 +281,25 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 			}
 			mean = float64(sum) / l
 			variance = meanSquare - (mean * mean)
+
+			worst5 := v[len(v)-int(len(v)/100):]
+			if len(worst5) == 0 {
+				worst5 = append(worst5, 0)
+			}
+
+			sum = 0
+			for _, value := range worst5 {
+				sum += uint64(value)
+			}
+			worst5average = float64(sum) / float64(len(worst5))
 		}
-		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), len(v) / (setLen + 1), duration[uint16(setLen)], memoryAllocation[uint16(setLen)]}
+
+		if setLen == 0 {
+			subjects = float64(len(v)) / averageSize
+		} else {
+			subjects = float64(len(v)) / float64(setLen)
+		}
+		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), subjects, worst5average + 1, duration[uint16(setLen)], memoryAllocation[uint16(setLen)]}
 	}
 	return
 }
@@ -288,7 +313,8 @@ type evalSummary struct {
 	top5             float64
 	top10            float64
 	sampleSize       int
-	subjectCount     int
+	subjectCount     float64
+	worst5average    float64
 	duration         float64
 	memoryAllocation float64
 }
