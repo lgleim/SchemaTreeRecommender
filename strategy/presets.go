@@ -9,21 +9,29 @@ import (
 )
 
 // Helper method to create a condition that always evaluates to true.
-func makeAlwaysCondition() Condition {
+func MakeAlwaysCondition() Condition {
 	return func(asm *assessment.Instance) bool {
 		return true
 	}
 }
 
+//Not needed anylonger
 // Helper method to create the above-threshold condition.
-func makeAboveThresholdCondition(threshold int) Condition {
+func MakeAboveThresholdCondition(threshold int) Condition {
 	return func(asm *assessment.Instance) bool {
 		return len(asm.Props) > threshold
 	}
 }
 
+func MakeBelowThresholdCondition(threshold int) Condition {
+	return func(asm *assessment.Instance) bool {
+		return len(asm.Props) < threshold
+	}
+}
+
+//Not needed anylonger
 // Helper Method to create too-many-recommendations-condition: When the standard recommender returns more than count many recommendations the condition is true, else false
-func makeTooManyRecommendationsCondition(threshold int) Condition {
+func MakeTooManyRecommendationsCondition(threshold int) Condition {
 	return func(asm *assessment.Instance) bool {
 		recommendation := asm.CalcRecommendations()
 		if len(recommendation) > threshold {
@@ -34,7 +42,7 @@ func makeTooManyRecommendationsCondition(threshold int) Condition {
 }
 
 // Helper Method to create too-few-recommendations-condition: When the standard recommender returns less than count many recommendations the condition is true, else false
-func makeTooFewRecommendationsCondition(threshold int) Condition {
+func MakeTooFewRecommendationsCondition(threshold int) Condition {
 	return func(asm *assessment.Instance) bool {
 		recommendation := asm.CalcRecommendations()
 		if len(recommendation) < threshold {
@@ -44,8 +52,19 @@ func makeTooFewRecommendationsCondition(threshold int) Condition {
 	}
 }
 
+// Helper Method to create too-unlikely-recommendations-condition: When the standard recommender returns a recommendation where the top 10 has lower probability than threshhold (in decimal percentage eg 0.5)
+func MakeTooUnlikelyRecommendationsCondition(threshold float32) Condition {
+	return func(asm *assessment.Instance) bool {
+		recommendation := asm.CalcRecommendations()
+		if recommendation.Top10AvgProbibility() < threshold {
+			return true
+		}
+		return false
+	}
+}
+
 // Helper method to create the direct SchemaTree procedure call.
-func makeDirectProcedure(tree *schematree.SchemaTree) Procedure {
+func MakeDirectProcedure(tree *schematree.SchemaTree) Procedure {
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return tree.RecommendProperty(asm.Props)
 	}
@@ -59,16 +78,15 @@ func makeAssessmentAwareDirectProcedure() Procedure {
 }
 
 // Helper method to create the 'deletelowfrequency' backoff procedure.
-func makeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int) Procedure {
-	b := backoff.NewBackoffDeleteLowFrequencyItems(tree, parExecs, backoff.StepsizeLinear)
+func MakeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int, stepsize backoff.StepsizeFunc, condition backoff.InternalCondition) Procedure {
+	b := backoff.NewBackoffDeleteLowFrequencyItems(tree, parExecs, stepsize, condition)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
 	}
 }
 
 // Helper method to create the 'splitproperty' backoff procedure.
-// TODO: This method could be changed to allow for customized splitter and merger functions.
-func makeSplitPropertyProcedure(tree *schematree.SchemaTree) Procedure {
+func MakeSplitPropertyProcedure(tree *schematree.SchemaTree, splitter backoff.SplitterFunc, merger backoff.MergerFunc) Procedure {
 	b := backoff.NewBackoffSplitPropertySet(tree, backoff.TwoSupportRangesSplitter, backoff.AvgMerger)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
@@ -84,21 +102,33 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	// Will always call the deleteLowFrequency backoff algorithm.
 	case "deletelowfrequency":
 		wf.Push(
-			makeAlwaysCondition(),
-			makeDeleteLowFrequencyProcedure(tree, 4),
+			MakeAlwaysCondition(),
+			MakeDeleteLowFrequencyProcedure(tree, 4, backoff.StepsizeProportional, backoff.MakeMoreThanInternalCondition(10)),
 			"always run deletelowfrequency with 4 parallel processes",
+		)
+
+	case "best":
+		wf.Push(
+			MakeTooFewRecommendationsCondition(1),
+			MakeDeleteLowFrequencyProcedure(tree, 4, backoff.StepsizeLinear, backoff.MakeMoreThanInternalCondition(4)),
+			"run deletelowfrequency with 4 parallel processes",
+		)
+		wf.Push(
+			MakeAlwaysCondition(),
+			MakeDirectProcedure(tree),
+			"always run direct algorithm",
 		)
 
 	// Will always call the splitProperty backoff algorithm.
 	case "splitproperty":
 		wf.Push(
-			makeAboveThresholdCondition(2),
-			makeSplitPropertyProcedure(tree),
+			MakeAboveThresholdCondition(2),
+			MakeSplitPropertyProcedure(tree, backoff.EverySecondItemSplitter, backoff.MaxMerger),
 			"with 3 or more properties run splitproperty",
 		)
 		wf.Push(
-			makeAlwaysCondition(),
-			makeDirectProcedure(tree),
+			MakeAlwaysCondition(),
+			MakeDirectProcedure(tree),
 			"default to running direct algorithm",
 		)
 
@@ -106,12 +136,12 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	// assessment-aware procedure can use those recommendations.
 	case "toofewrecommendations":
 		wf.Push(
-			makeTooFewRecommendationsCondition(10),
-			makeDeleteLowFrequencyProcedure(tree, 4),
+			MakeTooFewRecommendationsCondition(10),
+			MakeDeleteLowFrequencyProcedure(tree, 4, backoff.StepsizeProportional, backoff.MakeMoreThanInternalCondition(10)),
 			"if less than 10 recommendations are generated, run the deletelowfrequency backoff",
 		)
 		wf.Push(
-			makeAlwaysCondition(),
+			MakeAlwaysCondition(),
 			makeAssessmentAwareDirectProcedure(),
 			"default to direct algorithm, but use assessment cache if possible",
 		)
@@ -119,8 +149,8 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	// Calls the schematree core algorithm directly.
 	case "direct":
 		wf.Push(
-			makeAlwaysCondition(),
-			makeDirectProcedure(tree),
+			MakeAlwaysCondition(),
+			MakeDirectProcedure(tree),
 			"always run direct algorithm",
 		)
 

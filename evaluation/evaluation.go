@@ -8,7 +8,9 @@ import (
 	"log"
 	"math"
 	"os"
+	"recommender/assessment"
 	"recommender/schematree"
+	"recommender/strategy"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
@@ -30,15 +32,15 @@ func main() {
 	traceFile := flag.String("trace", "", "write execution trace to `file`")
 	trainedModel := flag.String("model", "", "read stored schematree from `file`")
 	testFile := flag.String("testSet", "", "the file to parse")
+	batchTest := flag.Bool("batchTest", false, "Switch between batch test and normal test")
+	createConfigs := flag.Bool("createConfigs", false, "Create a bunch of config")
+	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
+	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 
 	logr := log.New(os.Stderr, "", 0)
 
 	// parse commandline arguments/flags
 	flag.Parse()
-
-	if *testFile == "" {
-		log.Fatalln("A test set must be provided!")
-	}
 
 	// write cpu profile to file
 	if *cpuprofile != "" {
@@ -81,40 +83,64 @@ func main() {
 
 	stats := make(map[uint16][]uint32)
 
-	f, err := os.Open(*testFile + ".eval")
-	if err == nil {
-		logr.Println("Loading evaluation results from previous run!")
-		decoder := gob.NewDecoder(f)
-
-		err = decoder.Decode(&stats)
-		if err != nil {
-			log.Fatalln("Failed to decode stats!", err)
+	if *createConfigs {
+		if *createConfigsCreater == "" {
+			log.Fatalln("A Create Config File must be provided in ./configs!")
 		}
-		// // to be deleted ...
-		// var summary []evalSummary
-		// err = decoder.Decode(&summary)
-		// fmt.Println(err, summary)
-		// // ... /
-
-	} else {
-		// evaluation
+		createConfigFiles(createConfigsCreater)
+	} else if *batchTest {
+		// Run all config files and benchmark those. Schematree is taken from ../testdata/10M.nt.gz.schemaTree.bin
+		// test data is encoded in the config files
+		// Output is csv file in ./
 		if *trainedModel == "" {
-			log.Fatalln("A model must be provided!")
+			log.Fatalln("A model must be provided for Batch Test!")
+			return
 		}
-		tree, err := schematree.LoadSchemaTree(*trainedModel)
+		err := batchConfigBenchmark(*trainedModel, *numberConfigs)
 		if err != nil {
-			log.Fatalln(err)
+			log.Fatalln("Batch Config Failed", err)
+			return
+		}
+	} else {
+
+		if *testFile == "" {
+			log.Fatalln("A test set must be provided!")
 		}
 
-		stats, _ = evaluation(tree, testFile)
+		f, err := os.Open(*testFile + ".eval")
+		if err == nil {
+			logr.Println("Loading evaluation results from previous run!")
+			decoder := gob.NewDecoder(f)
 
-		f, _ := os.Create(*testFile + ".eval")
-		e := gob.NewEncoder(f)
-		// e.Encode(summary)
-		e.Encode(stats)
-		f.Close()
+			err = decoder.Decode(&stats)
+			if err != nil {
+				log.Fatalln("Failed to decode stats!", err)
+			}
+			// // to be deleted ...
+			// var summary []evalSummary
+			// err = decoder.Decode(&summary)
+			// fmt.Println(err, summary)
+			// // ... /
+
+		} else {
+			// evaluation
+			if *trainedModel == "" {
+				log.Fatalln("A model must be provided!")
+			}
+			tree, err := schematree.LoadSchemaTree(*trainedModel)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			stats, _ = evaluation(tree, testFile, strategy.MakePresetWorkflow("direct", tree))
+
+			f, _ := os.Create(*testFile + ".eval")
+			e := gob.NewEncoder(f)
+			// e.Encode(summary)
+			e.Encode(stats)
+			f.Close()
+		}
+		writeStatisticsToFile(stats, *testFile)
 	}
-	writeStatisticsToFile(stats, *testFile)
 }
 
 type evalResult struct {
@@ -127,7 +153,7 @@ type evalResources struct {
 	memoryAllocation uint64
 }
 
-func evaluation(tree *schematree.SchemaTree, testFile *string) (stats map[uint16][]uint32, resources map[uint16][]*evalResources) {
+func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow) (stats map[uint16][]uint32, resources map[uint16][]*evalResources) {
 	resources = make(map[uint16][]*evalResources)
 	stats = make(map[uint16][]uint32)
 
@@ -154,7 +180,8 @@ func evaluation(tree *schematree.SchemaTree, testFile *string) (stats map[uint16
 			recs = emptyRecs
 		} else {
 			start := time.Now()
-			recs = tree.RecommendProperty(properties)
+			asm := assessment.NewInstance(properties, tree, true)
+			recs = wf.Recommend(asm)
 			duration = time.Since(start).Nanoseconds()
 			runtime.ReadMemStats(&m)
 			resource = evalResources{duration, m.Alloc / 1024 / 1024}

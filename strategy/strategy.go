@@ -12,7 +12,6 @@ package strategy
 //       assessment - creating it and then only delivering it to the strategy)
 
 import (
-	"log"
 	"recommender/assessment"
 	"recommender/schematree"
 )
@@ -41,14 +40,14 @@ func (wf *Workflow) Push(cond Condition, proc Procedure, desc string) {
 // Go through the workflow and execute the first procedure that has a valid condition.
 // That procedure will return the list of recommended properties.
 func (wf *Workflow) Recommend(asm *assessment.Instance) schematree.PropertyRecommendations {
-	log.Println("Starting the strategy workflow:")
+	//log.Println("Starting the strategy workflow:")
 	for _, step := range *wf {
 		if step.check(asm) {
-			log.Printf("  Run entry '%s'", step.desc)
+			//log.Printf("  Run entry '%s'", step.desc)
 			return step.run(asm)
 		}
-		log.Printf("  Skip entry '%s'", step.desc)
+		//log.Printf("  Skip entry '%s'", step.desc)
 	}
-	log.Printf("  Failed to select any entry of the strategy workflow.")
+	//log.Printf("  Failed to select any entry of the strategy workflow.")
 	return nil
 }

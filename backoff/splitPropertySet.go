@@ -5,8 +5,8 @@ import (
 	"sort"
 )
 
-type splitterFunc func(ST.IList) []ST.IList
-type mergerFunc func([]ST.PropertyRecommendations) ST.PropertyRecommendations
+type SplitterFunc func(ST.IList) []ST.IList
+type MergerFunc func([]ST.PropertyRecommendations) ST.PropertyRecommendations
 
 // BackoffSplitPropertySet holds all information necessary to execute the algorithm
 type BackoffSplitPropertySet struct {
@@ -99,7 +99,7 @@ var AvgMerger = func(recommendations []ST.PropertyRecommendations) (merged ST.Pr
 }
 
 // NewBackoffSplitPropertySet : constructor method
-func NewBackoffSplitPropertySet(pTree *ST.SchemaTree, pSplitter splitterFunc, pMerger mergerFunc) *BackoffSplitPropertySet {
+func NewBackoffSplitPropertySet(pTree *ST.SchemaTree, pSplitter SplitterFunc, pMerger MergerFunc) *BackoffSplitPropertySet {
 	return &BackoffSplitPropertySet{tree: pTree, splitter: pSplitter, merger: pMerger}
 }
 

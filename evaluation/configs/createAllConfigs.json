@@ -1,0 +1,9 @@
+{
+ "Conds": ["tooFewRecommendations","aboveThreshold","tooUnlikelyRecommendationsCondition"],
+ "Merger": ["max","avg"],
+ "Splitter": ["everySecondItem", "twoSupportRanges"],
+ "Steps":["stepsizeLinear","stepsizeProportional"],
+ "MaxThreshold": 3,
+ "MaxParallel": 4,
+ "MaxFloatThreshold": 0
+}
