@@ -23,17 +23,17 @@ func TestConditions(t *testing.T) {
 	asm21 := assessment.NewInstance(schematree.IList{item2, item1}, schema, true)
 
 	// check all strategies
-	countTooLessProperties := makeTooFewRecommendationsCondition(500)
+	countTooLessProperties := MakeTooFewRecommendationsCondition(500)
 	if countTooLessProperties(asm1) || !countTooLessProperties(asm2) {
 		t.Errorf("'TooLessRecommendationsCondition' failed.")
 	}
 
-	countTooManyProperties := makeTooManyRecommendationsCondition(500)
+	countTooManyProperties := MakeTooManyRecommendationsCondition(500)
 	if !countTooManyProperties(asm1) || countTooManyProperties(asm2) {
 		t.Errorf("'TooManyRecommendationsCondition' failed.")
 	}
 
-	aboveThreshholdCondition := makeAboveThresholdCondition(1)
+	aboveThreshholdCondition := MakeAboveThresholdCondition(1)
 	if aboveThreshholdCondition(asm1) || !aboveThreshholdCondition(asm21) {
 		t.Errorf("'aboveThreshholdCondition' failed.")
 	}

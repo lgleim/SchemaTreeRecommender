@@ -6,28 +6,51 @@ import (
 	ST "recommender/schematree"
 )
 
-type stepsizeFunc func(int, int, int) int
+type StepsizeFunc func(int, int, int) int
+
+type InternalCondition func(*ST.PropertyRecommendations) bool
 
 type BackoffDeleteLowFrequencyItems struct {
 	tree               *ST.SchemaTree
 	parallelExecutions int
 	stepsize           func(int, int, int) int // Stepsize function
+	condition          InternalCondition
 }
 
 // step size function literals for defining how many items should be removed.
 // linear removal: f(x) = x
 var StepsizeLinear = func(size, iterator, parallelExecutions int) int {
-	return iterator
+	if iterator < size {
+		return iterator
+	}
+	return size - 1
 }
 
-// proportional removal up to 80% of all items
+func MakeMoreThanInternalCondition(threshold int) InternalCondition {
+	return func(recs *ST.PropertyRecommendations) bool {
+		if len(*recs) > threshold {
+			return true
+		}
+		return false
+	}
+}
+func MakeMoreThanProbabilityInternalCondition(threshold float32) InternalCondition {
+	return func(recs *ST.PropertyRecommendations) bool {
+		if recs.Top10AvgProbibility() > threshold {
+			return true
+		}
+		return false
+	}
+}
+
+// proportional removal up to 30% of all items
 var StepsizeProportional = func(size, iterator, parallelExecutions int) int {
-	return int(math.Round(0.8 * float64(iterator) / float64(parallelExecutions) * float64(size)))
+	return int(math.Round(0.4 * float64(iterator) / float64(parallelExecutions) * float64(size)))
 }
 
 // NewBackoffDeleteLowFrequencyItems : constructor method
-func NewBackoffDeleteLowFrequencyItems(pTree *ST.SchemaTree, pParallelExecutions int, pStepsize stepsizeFunc) *BackoffDeleteLowFrequencyItems {
-	return &BackoffDeleteLowFrequencyItems{tree: pTree, parallelExecutions: pParallelExecutions, stepsize: pStepsize}
+func NewBackoffDeleteLowFrequencyItems(pTree *ST.SchemaTree, pParallelExecutions int, pStepsize StepsizeFunc, pCondition InternalCondition) *BackoffDeleteLowFrequencyItems {
+	return &BackoffDeleteLowFrequencyItems{tree: pTree, parallelExecutions: pParallelExecutions, stepsize: pStepsize, condition: pCondition}
 }
 
 func (strat *BackoffDeleteLowFrequencyItems) init(pTree *ST.SchemaTree, pParallelExecutions int, pStepsize func(int, int, int) int) {
@@ -53,7 +76,7 @@ func (strat *BackoffDeleteLowFrequencyItems) split(propertyList ST.IList) (subli
 
 	//create the subsets according to the sebsize function. When the stepsize exeeded the limit of the list no sublist for that stepsize will be constructed.
 	for i := 0; i < strat.parallelExecutions; i++ {
-		stepsize := strat.stepsize(i, len(propertyList), strat.parallelExecutions)
+		stepsize := strat.stepsize(len(propertyList), i+1, strat.parallelExecutions)
 		s, r, err := strat.manipulate(propertyList, stepsize)
 		if err == nil {
 			sublists[i] = s
@@ -104,11 +127,10 @@ func (strat *BackoffDeleteLowFrequencyItems) recommendInParrallel(sublists, remo
 		//fmt.Println("Arrive", rec.subprocess)
 		// work if the last observed elemnt is returned from go routine.
 		for rankedList[j] != nil {
-			// TODO integrate condition for good recommendation here (replace false here)
 			// Take that recommendation where less items were removed and that satisfies the condition for a good recommendation.
 			// If non applies than return
 			//fmt.Println("Test:", j)
-			if j == len(sublists)-1 || false {
+			if (j == len(sublists)-1) || (strat.condition(&rankedList[j])) {
 				return rankedList[j]
 			}
 			j++

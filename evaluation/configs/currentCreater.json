@@ -1,0 +1,9 @@
+{
+ "Conds": ["tooFewRecommendations"],
+ "Merger": [],
+ "Splitter": [],
+ "Steps":["stepsizeProportional"],
+ "MaxThreshold": 1,
+ "MaxParallel": 4,
+ "MaxFloatThreshold": 0.0
+}

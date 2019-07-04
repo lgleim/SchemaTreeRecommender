@@ -148,6 +148,18 @@ func (ps PropertyRecommendations) String() string {
 	return s
 }
 
+// calculate average of probability of the top ten recommendations
+// if less than 10 recommendations, then missing values have probability 0
+func (ps PropertyRecommendations) Top10AvgProbibility() float32 {
+	var sum float64
+	for i := 0; i < 10; i++ {
+		if i < len(ps) {
+			sum += ps[i].Probability
+		}
+	}
+	return float32(sum) / 10.0
+}
+
 type rankedTypeCandidate struct {
 	Class       *iType
 	Probability float64
