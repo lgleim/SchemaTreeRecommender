@@ -87,7 +87,7 @@ func MakeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int, 
 
 // Helper method to create the 'splitproperty' backoff procedure.
 func MakeSplitPropertyProcedure(tree *schematree.SchemaTree, splitter backoff.SplitterFunc, merger backoff.MergerFunc) Procedure {
-	b := backoff.NewBackoffSplitPropertySet(tree, backoff.TwoSupportRangesSplitter, backoff.AvgMerger)
+	b := backoff.NewBackoffSplitPropertySet(tree, splitter, merger)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
 	}
