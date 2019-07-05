@@ -1,77 +1,27 @@
-package main
+package splitter
 
 import (
 	"bufio"
-	"flag"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
-	"recommender/schematree"
-	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
 	"strconv"
 	"strings"
 	"unicode/utf8"
 
 	gzip "github.com/klauspost/pgzip"
+
+	recIO "recommender/io"
 )
 
-func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	fileName := flag.String("file", "experiments/10M.nt.gz", "the file to parse")
-	oneInN := flag.Int64("n", 1000, "split off every Nth subject into testing data set") // TODO: handle negative inputs
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
-	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
-	traceFile := flag.String("trace", "", "write execution trace to `file`")
-
-	// parse commandline arguments/flags
-	flag.Parse()
-
-	// write cpu profile to file
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
-		}
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
-	}
-
-	// write cpu profile to file
-	if *memprofile != "" {
-		defer func() {
-			f, err := os.Create(*memprofile)
-			if err != nil {
-				log.Fatal("could not create memory profile: ", err)
-			}
-			runtime.GC() // get up-to-date statistics
-			if err := pprof.WriteHeapProfile(f); err != nil {
-				log.Fatal("could not write memory profile: ", err)
-			}
-			f.Close()
-		}()
-	}
-
-	// write cpu profile to file
-	if *traceFile != "" {
-		f, err := os.Create(*traceFile)
-		if err != nil {
-			log.Fatal("could not create trace file: ", err)
-		}
-		if err := trace.Start(f); err != nil {
-			log.Fatal("could not start tracing: ", err)
-		}
-		defer trace.Stop()
-	}
+// SplitBySampling splits a dataset file into two by taking out every Nth entry.
+// Taken from the original splitter without modifications.
+func SplitBySampling(fileName string, oneInN int64) error {
 
 	// Set up file reader
-	reader, err := schematree.UniversalReader(*fileName)
+	reader, err := recIO.UniversalReader(fileName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -80,8 +30,8 @@ func main() {
 	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
 
 	// Set up training set writer
-	fName := strings.TrimSuffix(*fileName, filepath.Ext(*fileName))
-	trainingSet, err := os.Create(fName + "_1in" + strconv.FormatInt(*oneInN, 10) + "_train.gz")
+	fName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
+	trainingSet, err := os.Create(fName + "_1in" + strconv.FormatInt(oneInN, 10) + "_train.gz")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -93,7 +43,7 @@ func main() {
 	defer wTrain.Close()
 
 	// Set up test set writer
-	testSet, err := os.Create(fName + "_1in" + strconv.FormatInt(*oneInN, 10) + "_test.gz")
+	testSet, err := os.Create(fName + "_1in" + strconv.FormatInt(oneInN, 10) + "_test.gz")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -106,7 +56,7 @@ func main() {
 
 	// prepare dynamic writer switching
 	var wRing uint16
-	testModulo := uint16(*oneInN)
+	testModulo := uint16(oneInN)
 
 	// parse file
 	var isPrefix, skip bool
@@ -153,6 +103,7 @@ func main() {
 	if err != nil && err != io.EOF {
 		log.Fatalf("Scanner encountered error while trying to parse triples: %v\n", err)
 	}
+	return nil
 }
 
 // Adapted from 'ScanWords' in https://golang.org/src/bufio/scan.go

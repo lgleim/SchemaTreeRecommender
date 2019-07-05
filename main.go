@@ -6,14 +6,16 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"recommender/schematree"
-	"recommender/server"
-	"recommender/strategy"
 	"runtime"
 	"runtime/pprof"
 	"runtime/trace"
 
 	"github.com/spf13/cobra"
+
+	"recommender/schematree"
+	"recommender/server"
+	"recommender/splitter"
+	"recommender/strategy"
 )
 
 func main() {
@@ -27,6 +29,7 @@ func main() {
 	var writeOutPropertyFreqs bool               // used by build-tree
 	var strategyName string                      // used by serve
 	var serveOnPort int                          // used by serve
+	var everyNthSubject uint                     // used by split-dataset:1-in-n
 
 	// writeOutPropertyFreqs := flag.Bool("writeOutPropertyFreqs", false, "set this to write the frequency of all properties to a csv after first pass or schematree loading")
 
@@ -90,7 +93,7 @@ func main() {
 		},
 	}
 
-	// flags for root command
+	// global flags for root command
 	cmdRoot.PersistentFlags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
 	cmdRoot.PersistentFlags().StringVar(&memprofile, "memprofile", "", "write memory profile to `file`")
 	cmdRoot.PersistentFlags().StringVar(&traceFile, "trace", "", "write execution trace to `file`")
@@ -121,8 +124,6 @@ func main() {
 
 		},
 	}
-
-	// flags for build-tree subcommand
 	// cmdBuildTree.Flags().StringVarP(&inputDataset, "dataset", "d", "", "`path` to the dataset file to parse")
 	// cmdBuildTree.MarkFlagRequired("dataset")
 	cmdBuildTree.Flags().Int64VarP(&firstNsubjects, "first", "n", 0, "only parse the first `n` subjects") // TODO: handle negative inputs
@@ -158,8 +159,6 @@ func main() {
 			waitForReturn()
 		},
 	}
-
-	// flags for serve subcommand
 	// cmdBuildTree.Flags().StringVarP(&treeBinary, "tree", "t", "", "read stored schematree from `file`")
 	// cmdBuildTree.MarkFlagRequired("load")
 	cmdServe.Flags().IntVarP(&serveOnPort, "port", "p", 8080, "`port` of http server")
@@ -196,7 +195,66 @@ func main() {
 		},
 	}
 
+	// subcommand split-dataset
+	cmdSplitDataset := &cobra.Command{
+		Use:   "split-dataset",
+		Short: "Split a dataset using various methods",
+		Long: "Select the method with which to split a N-Triple dataset file and" +
+			" generate multiple smaller datasets in the same directory and with" +
+			" suffixed names. Suffixes depend on chosen splitter method.",
+		Args: cobra.NoArgs,
+
+		// Run: func(cmd *cobra.Command, args []string) {
+		// inputDataset := &args[0]
+		// inputMethod := &args[1]
+
+		// // inputMethod defines which splitting to perform
+		// switch *inputMethod {
+		// case "by-type":
+		// 	splitter.SplitByType(*inputDataset)
+		// default:
+		// 	fmt.Println("Available methods are: by-type , 1-in-n")
+		// }
+
+		// },
+	}
+
+	// subsubcommand split-dataset by-type
+	cmdSplitDatasetByType := &cobra.Command{
+		Use:   "by-type <dataset>",
+		Short: "Split a dataset according to the type of wikidata entry",
+		Long: "Split a N-Triple <dataset> file into three files according to the type of wikidata" +
+			" entry: item, prop and misc. The split files are generated in the same directory" +
+			" as the <dataset>, stripped of their compression extension and given the following" +
+			" names: <extless-dataset>.item.gz, <extless-dataset>.prop.gz, <extless-dataset>.misc.gz",
+		Args: cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+			splitter.SplitByType(*inputDataset)
+		},
+	}
+
+	// subsubcommand split-dataset 1-in-n
+	// TODO: Explain naming convention used for split datasets
+	cmdSplitDatasetBySampling := &cobra.Command{
+		Use:   "1-in-n <dataset>",
+		Short: "Split a dataset using systematic sampling",
+		Long: "Split a N-Triple <dataset> file into two files where every Nth subject goes into" +
+			" one file and the rest into the second file.",
+		Args: cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+			splitter.SplitBySampling(*inputDataset, int64(everyNthSubject))
+		},
+	}
+	cmdSplitDatasetBySampling.Flags().UintVarP(&everyNthSubject, "nth", "n", 1000, "split every N-th subject")
+
 	// putting the command hierarchy together
+	cmdRoot.AddCommand(cmdSplitDataset)
+	cmdSplitDataset.AddCommand(cmdSplitDatasetByType)
+	cmdSplitDataset.AddCommand(cmdSplitDatasetBySampling)
 	cmdRoot.AddCommand(cmdBuildTree)
 	cmdRoot.AddCommand(cmdServe)
 	cmdRoot.AddCommand(cmdBuildDot)
