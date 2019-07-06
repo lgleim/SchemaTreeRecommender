@@ -2,7 +2,6 @@ package splitter
 
 import (
 	"bytes"
-	"fmt"
 
 	recIO "recommender/io"
 )
@@ -90,8 +89,4 @@ func SplitByType(filePath string) error {
 	}
 
 	return nil
-}
-
-func outputTriple(t *recIO.Triple) {
-	fmt.Println("( " + string(t.Subject) + " , " + string(t.Predicate) + " , " + string(t.Object) + " )")
 }

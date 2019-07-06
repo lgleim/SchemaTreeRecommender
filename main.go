@@ -12,6 +12,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"recommender/glossary"
 	"recommender/schematree"
 	"recommender/server"
 	"recommender/splitter"
@@ -102,7 +103,8 @@ func main() {
 	cmdBuildTree := &cobra.Command{
 		Use:   "build-tree <dataset>",
 		Short: "Build the SchemaTree model",
-		Long: "A SchemaTree model will be built using the file provided in <dataset>. Two output files will be" +
+		Long: "A SchemaTree model will be built using the file provided in <dataset>." +
+			" The dataset should be a N-Triple of Items. Two output files will be" +
 			" generated in the same directory as <dataset> and with suffixed names, namely:" +
 			" '<dataset>.firstPass.bin' and '<dataset>.schemaTree.bin'",
 		Args: cobra.ExactArgs(1),
@@ -131,6 +133,30 @@ func main() {
 		&writeOutPropertyFreqs, "write-frequencies", "f", false,
 		"write all property frequencies to a csv file named '<dataset>.propertyFreqs.csv' after the SchemaTree is built",
 	)
+
+	// subcommand build-glossary
+	cmdBuildGlossary := &cobra.Command{
+		Use:   "build-glossary <dataset>",
+		Short: "Build the Glossary that maps properties to multi-lingual descriptions",
+		Long: "A Glossary will be built using the file provided in <dataset>. The input" +
+			" file should be a N-Triple of Property entries. The output file will be" +
+			" generated in the same directory as <dataset> with the name:" +
+			" '<dataset>.glossary.bin'",
+		Args: cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+
+			// Build the glossary
+			glos, err := glossary.BuildGlossary(*inputDataset)
+			if err != nil {
+				log.Panicln(err)
+			}
+			fmt.Printf("SOmething should have happened: %d\n", len(*glos))
+			glos.Output()
+
+		},
+	}
 
 	// subcommand serve
 	cmdServe := &cobra.Command{
@@ -256,6 +282,7 @@ func main() {
 	cmdSplitDataset.AddCommand(cmdSplitDatasetByType)
 	cmdSplitDataset.AddCommand(cmdSplitDatasetBySampling)
 	cmdRoot.AddCommand(cmdBuildTree)
+	cmdRoot.AddCommand(cmdBuildGlossary)
 	cmdRoot.AddCommand(cmdServe)
 	cmdRoot.AddCommand(cmdBuildDot)
 
