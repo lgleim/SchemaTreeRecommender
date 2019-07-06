@@ -15,7 +15,7 @@ type Triple struct { // TODO: Maybe I can use string instead of byte[]
 	Subject   []byte
 	Predicate []byte
 	Object    []byte
-	Line      []byte // Holds the entire line including terminating dot and newline
+	Line      []byte // Holds the entire line including terminating dot (but no newline)
 }
 
 // TripleParser reads an internal file and produces triples from it.
@@ -80,13 +80,62 @@ func (tp *TripleParser) NextTriple() (*Triple, error) {
 	return &Triple{subjectToken, predicateToken, objectToken, origLine}, nil
 }
 
-// Close closes the handlers for the scanner and underlying file.
+// Close the handlers for the scanner and underlying file.
 func (tp *TripleParser) Close() error {
 	defer tp.reader.Close()
 	return nil
 }
 
+// Output the values of a triple to stdout.
+func (t *Triple) Output() {
+	fmt.Println("( " + string(t.Subject) + " , " + string(t.Predicate) + " , " + string(t.Object) + " )")
+}
+
+// InterpreteLangLiteral will interprete a literal with language tag and return the
+// text and language code.
+// It is assumed that the token has no leading nor trailing spaces.
+func InterpreteLangLiteral(token []byte) (text []byte, lang []byte) {
+	var sigil rune // current rune that is being checked
+	var width int  // width of sigil
+	var start int  // remember the position where the literal text started
+
+	// Similar approach to reading tokens, but with less nesting options.
+	// Will detect the limits of the quoted string, and then use the rest and lang tag.
+	var quoting bool
+	var escaping bool
+	for pos := 0; pos < len(token); pos += width {
+		sigil, width = identifyRune(token[pos:])
+
+		// if escaping, just jump to next rune
+		if escaping == true {
+			escaping = false
+			continue
+		}
+
+		// a backslash will start escaping, no parsing will ever be done with this
+		if sigil == '\\' {
+			escaping = true
+			continue
+		}
+
+		// non-nesting state: can enter a nesting state and spaces will terminate token
+		if quoting == false && sigil == '"' { // should always enter this at first position
+			quoting = true
+			start = pos + width
+		} else if quoting == true && sigil == '"' { // exit the quoted string, text is found
+			quoting = false
+			text = token[start:pos]
+		} else if quoting == false && sigil == '@' { // tells us that lang tags are being used
+			lang = token[pos+width:]
+			break
+		}
+	}
+
+	return // naked return
+}
+
 // Retrieves a token from a N-Triple entry.
+// TODO: Test multiple escaping cases
 func retrieveToken(data []byte) (advance int, token []byte) {
 	var sigil rune        // current rune that is being checked
 	var width int         // width of sigil
@@ -108,8 +157,14 @@ func retrieveToken(data []byte) (advance int, token []byte) {
 	for ; start+length < len(data); length += width {
 		sigil, width = identifyRune(data[start+length:])
 
-		// need to check if currently escaping to allow \" inside a quoted literal
-		if sigil == '\'' {
+		// if escaping, just jump to next rune
+		if escaping == true {
+			escaping = false
+			continue
+		}
+
+		// a backslash will start escaping, no parsing will ever be done with this
+		if sigil == '\\' {
 			escaping = true
 			continue
 		}
@@ -122,14 +177,9 @@ func retrieveToken(data []byte) (advance int, token []byte) {
 				break
 			}
 		} else { // nesting state: can exit nesting state
-			if escaping == false && ((nesting == '<' && sigil == '>') || (nesting == '"' && sigil == '"')) {
+			if (nesting == '<' && sigil == '>') || (nesting == '"' && sigil == '"') {
 				nesting = 0
 			}
-		}
-
-		// escaping mode ends one iteration after it starts
-		if escaping == true {
-			escaping = false
 		}
 	}
 
