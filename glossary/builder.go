@@ -2,7 +2,10 @@ package glossary
 
 import (
 	"bytes"
+	"encoding/gob"
 	"fmt"
+	"log"
+	"os"
 	"recommender/io"
 	recIO "recommender/io"
 )
@@ -99,5 +102,26 @@ func (glos *Glossary) Output() {
 	// } else {
 	// 	fmt.Println(err)
 	// }
+	return
+}
+
+func (glos *Glossary) WriteToFile(path string) {
+	f, _ := os.Create(path + ".bin")
+	e := gob.NewEncoder(f)
+	e.Encode(*glos)
+	f.Close()
+}
+
+func ReadFromFile(path string) (glos *Glossary) {
+	f, err := os.Open(path)
+	if err != nil {
+		log.Fatalln("Failed to open file!", err)
+	}
+	decoder := gob.NewDecoder(f)
+	err = decoder.Decode(&glos)
+	if err != nil {
+		log.Fatalln("Failed to decode glossary!", err)
+	}
+	f.Close()
 	return
 }
