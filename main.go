@@ -153,28 +153,36 @@ func main() {
 			if err != nil {
 				log.Panicln(err)
 			}
-			fmt.Printf("SOmething should have happened: %d\n", len(*glos))
-			glos.Output()
 
+			// Store it in the same directory with 'glossary.bin' extension
+			glos.WriteToFile(*inputDataset + ".glossary.bin")
+			glos.OutputStats()
 		},
 	}
 
 	// subcommand serve
 	cmdServe := &cobra.Command{
-		Use:   "serve <tree>",
+		Use:   "serve <model> <glossary>",
 		Short: "Serve a SchemaTree model via an HTTP Server",
-		Long: "Load the schematree binary stored in path given by <tree> and then serve it using an" +
-			" HTTP Server. Available endpoints are given on startup.",
-		Args: cobra.ExactArgs(1),
+		Long: "Load the <model> (schematree binary) and the <glossary> (glossary binary) and the recommendation" +
+			" endpoint using an HTTP Server. Available endpoints are given on startup.",
+		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
-			treeBinary := &args[0]
+			modelBinary := &args[0]
+			glossaryBinary := &args[1]
 
 			// Load the schematree from the binary file.
-			schema, err := schematree.LoadSchemaTree(*treeBinary)
+			model, err := schematree.LoadSchemaTree(*modelBinary)
 			if err != nil {
 				log.Panicln(err)
 			}
 			schematree.PrintMemUsage()
+
+			// Load the glossary from the binary file.
+			glos, err := glossary.ReadFromFile(*glossaryBinary)
+			if err != nil {
+				log.Panicln(err)
+			}
 
 			// read config file if given as parameter, test if everything needed is there, create a workflow
 			// if no config file is given, the standard recommender is set as workflow.
@@ -188,27 +196,31 @@ func main() {
 				if err != nil {
 					log.Panicln(err)
 				}
-				workflow, err = configuration.ConfigToWorkflow(config, schema)
+				workflow, err = configuration.ConfigToWorkflow(config, model)
 				if err != nil {
 					log.Panicln(err)
 				}
 				log.Printf("Run Config Workflow %v", workflowFile)
 			} else {
-				workflow = strategy.MakePresetWorkflow("direct", schema)
+				workflow = strategy.MakePresetWorkflow("direct", model)
 				fmt.Printf("Run Standard Recommender ")
 			}
 
 			// Initiate the HTTP server. Make it stop on <Enter> press.
-			router := server.SetupEndpoints(schema, workflow)
-			go http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", serveOnPort), router)
+			router := server.SetupEndpoints(model, glos, workflow, 500)
 			fmt.Printf("Now listening on port %v\n", serveOnPort)
-			waitForReturn()
+			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", serveOnPort), router)
+
+			// Note: Code before started server as sub-routine and waited for return.
+			//go http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", serveOnPort), router)
+			//waitForReturn()
 		},
 	}
 	// cmdBuildTree.Flags().StringVarP(&treeBinary, "tree", "t", "", "read stored schematree from `file`")
 	// cmdBuildTree.MarkFlagRequired("load")
 	cmdServe.Flags().IntVarP(&serveOnPort, "port", "p", 8080, "`port` of http server")
 	cmdServe.Flags().StringVarP(&workflowFile, "workflow", "w", "", "`path` to config file that defines the workflow")
+
 	// subcommand visualize
 	cmdBuildDot := &cobra.Command{
 		Use:   "build-dot <tree>",

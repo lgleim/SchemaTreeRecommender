@@ -134,6 +134,24 @@ func InterpreteLangLiteral(token []byte) (text []byte, lang []byte) {
 	return // naked return
 }
 
+// InterpreteIriRef will interprete an IRIREF and return the string that is enclosed by the
+// tag delimiters.
+// It is assumed that the token has no leading nor trailing spaces.
+func InterpreteIriRef(token []byte) (text []byte) {
+	var firstSigil, lastSigil rune
+
+	// Because I assume no leading and trailing spaces, I can use this shortcut.
+	firstSigil, _ = identifyRune(token[0:])
+	lastSigil, _ = identifyRune(token[len(token)-1:])
+	if firstSigil == '<' && lastSigil == '>' {
+		text = token[1 : len(token)-1]
+	} else {
+		text = token
+	}
+
+	return // naked return
+}
+
 // Retrieves a token from a N-Triple entry.
 // TODO: Test multiple escaping cases
 func retrieveToken(data []byte) (advance int, token []byte) {

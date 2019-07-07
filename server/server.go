@@ -7,11 +7,140 @@ import (
 	"time"
 
 	"recommender/assessment"
+	"recommender/glossary"
 	"recommender/schematree"
 	"recommender/strategy"
 )
 
-func setupRecommenderHandler(tree *schematree.SchemaTree, workflow *strategy.Workflow) func(http.ResponseWriter, *http.Request) {
+// RecommenderRequest is the data representation of the request input in json.
+type RecommenderRequest struct {
+	Lang       string   `json:"lang"`
+	Types      []string `json:"types"`
+	Properties []string `json:"properties"`
+}
+
+// RecommenderResponse is the data representation of the json.
+type RecommenderResponse struct {
+	Recommendations []RecommendationOutputEntry `json:"recommendations"`
+}
+
+// RecommendationOutputEntry is each entry that is return from the server.
+type RecommendationOutputEntry struct {
+	PropertyStr *string `json:"property"`
+	Label       *string `json:"label"`
+	Description *string `json:"description"`
+	Probability float64 `json:"probability"`
+}
+
+// setupRecommender will setup a handler to recommend properties based on the list of properties and types. It
+// also receives a language with which additional information is added.
+// It will return an array of recommendations, with their respective probabilities, labels and descriptions.
+func setupMappedRecommender(
+	model *schematree.SchemaTree,
+	glos *glossary.Glossary,
+	workflow *strategy.Workflow,
+	hardLimit int, // Hard limit of recommendations to output
+) func(http.ResponseWriter, *http.Request) {
+
+	// // Build the JSON-Schema
+	// // TODO: Maybe it needs the '$schema' parameter, but not sure if draft-v7 uses that anymore.
+	// var endpointSchemaJSON = []byte(`
+	// 	{
+	// 		"title": "SchemaTree Recommendation Request"
+	// 		"type": "object",
+	// 		"properties": {
+	// 			"lang": {
+	// 				"type": "string"
+	// 			},
+	// 			"types": {
+	// 				"type" : "array",
+	// 				"items" : {
+	// 					"type": "string"
+	// 				}
+	// 			},
+	// 			"properties": {
+	// 				"type" : "array",
+	// 				"items" : {
+	// 					"type": "string"
+	// 				}
+	// 			}
+	// 		},
+	// 		"required": ["lang","types","properties"]
+	// 	}
+	// `)
+	// endpointSchema := &jsonschema.RootSchema{}
+	// if err := json.Unmarshal(endpointSchemaJSON, endpointSchema); err != nil {
+	// 	panic("Unable to interpret the JSON-Schema for MappedRecommender endpoint: " + err.Error())
+	// }
+	// // Check that the request is conform to the JSON-Schema.
+	// var body = []byte(`get this somehow from the request`)
+	// if errors, _ := rs.ValidateBytes(valid); len(errors) > 0 {
+	// 	panic(errors)
+	// }
+
+	// Fetch the map of all properties in the SchemaTree
+	pMap := model.PropMap
+
+	return func(res http.ResponseWriter, req *http.Request) {
+
+		// Decode the JSON input and build a list of input strings
+		var input = RecommenderRequest{}
+		err := json.NewDecoder(req.Body).Decode(&input)
+		if err != nil {
+			res.Write([]byte("Malformed Request.")) // TODO: Json-Schema helps
+			return
+		}
+		fmt.Println(input) // debug: output the request
+
+		// Match the input strings to build a list of input properties.
+		list := []*schematree.IItem{}
+		for _, pString := range input.Properties {
+			p, ok := pMap[pString]
+			if ok {
+				list = append(list, p)
+			}
+		}
+		// fmt.Println(tree.Support(list), tree.Root.Support)
+
+		// Make an assessment of the input properties.
+		assessment := assessment.NewInstance(list, model, true) // TODO: Introduce types into the assessment.
+
+		// Make a recommendation based on the assessed input and chosen strategy.
+		t1 := time.Now()
+		origRecs := workflow.Recommend(assessment)
+		fmt.Println(time.Since(t1))
+
+		// Put a hard limit on the recommendations returned.
+		if len(origRecs) > hardLimit {
+			origRecs = origRecs[:hardLimit]
+		}
+
+		// For each recommendation, add a mapping from the glossary.
+		labRecs := glossary.TranslateRecommendations(glos, input.Lang, origRecs)
+
+		// Prepare the recommendation list. The structure of the output is flatter than the labeled recommendations.
+		outputRecs := make([]RecommendationOutputEntry, len(labRecs), len(labRecs))
+		for i, rec := range labRecs {
+			outputRecs[i].PropertyStr = rec.Property.Str
+			outputRecs[i].Label = &rec.Content.Label
+			outputRecs[i].Description = &rec.Content.Description
+			outputRecs[i].Probability = rec.Probability
+		}
+
+		// Pack everything into the response
+		recResp := RecommenderResponse{Recommendations: outputRecs}
+
+		// Write the recommendations as a JSON array.
+		res.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(res).Encode(recResp)
+	}
+
+}
+
+// setupRecommender will setup a handler to recommend properties based on the list of properties and types.
+// It will return an array of recommendations with their respective probabilities.
+// No gloassary information is added to the response.
+func setupLeanRecommender(tree *schematree.SchemaTree, workflow *strategy.Workflow) func(http.ResponseWriter, *http.Request) {
 
 	// Fetch the map of all properties in the SchemaTree
 	pMap := tree.PropMap
@@ -57,97 +186,10 @@ func setupRecommenderHandler(tree *schematree.SchemaTree, workflow *strategy.Wor
 }
 
 // SetupEndpoints configures a router with all necessary endpoints and their corresponding handlers.
-func SetupEndpoints(tree *schematree.SchemaTree, workflow *strategy.Workflow) http.Handler {
+func SetupEndpoints(model *schematree.SchemaTree, glossary *glossary.Glossary, workflow *strategy.Workflow, hardLimit int) http.Handler {
 	router := http.NewServeMux()
-	router.HandleFunc("/recommender", setupRecommenderHandler(tree, workflow))
+	router.HandleFunc("/lean-recommender", setupLeanRecommender(model, workflow))
+	router.HandleFunc("/recommender", setupMappedRecommender(model, glossary, workflow, hardLimit))
 	// router.HandleFunc("/wikiRecommender", wikiRecommender)
 	return router
 }
-
-// ServeCustomizedSchematree : Serve a modified version of the SchemaTree that includes some
-// hard-coded customizations with backoff strategies. This is a temporary method to allow the
-// integration of backoff strategies while the complete change to server/main is in development.
-
-// TODO: Right now, this method is shut-down because I need some more info about wiki-recommender.
-
-// func ServeCustomizedSchematree(schema *schematree.SchemaTree, port int, strategyName string) {
-// 	pMap := schema.PropMap
-
-// 	// Build a strategy. In this case this will be hard-coded with some backoff strategies.
-// 	var strat = strategy.MakePresetStrategy(strategyName, schema)
-
-// 	// Setup the recommender using the strategy that was just built.
-// 	recommender := func(w http.ResponseWriter, r *http.Request) {
-// 		var properties []string
-// 		err := json.NewDecoder(r.Body).Decode(&properties)
-// 		if err != nil {
-// 			w.Write([]byte("Malformed Request. Expected an array of property IRIs"))
-// 			return
-// 		}
-// 		fmt.Println(properties)
-
-// 		list := []*schematree.IItem{}
-// 		for _, pString := range properties {
-// 			p, ok := pMap[pString]
-// 			if ok {
-// 				list = append(list, p)
-// 			}
-// 		}
-// 		// fmt.Println(schema.Support(list), schema.Root.Support)
-
-// 		// Make an assessment of the input properties.
-// 		assessment := assessment.NewInstance(list, schema, true)
-
-// 		t1 := time.Now()
-// 		rec := strat.Recommend(assessment)
-// 		fmt.Println(time.Since(t1))
-
-// 		if len(rec) > 500 {
-// 			rec = rec[:500]
-// 		}
-
-// 		w.Header().Set("Content-Type", "application/json")
-// 		json.NewEncoder(w).Encode(rec)
-// 	}
-
-// 	// TODO: Like the current version of schematree/main, we will mimick the wiki recomender. In
-// 	// the future, each endpoint should have their own method where they are constructed, all
-// 	// orchestrated by the main method of server.
-// 	wikiRecommender := func(w http.ResponseWriter, r *http.Request) {
-// 		var properties []string
-// 		err := json.NewDecoder(r.Body).Decode(&properties)
-// 		if err != nil {
-// 			w.Write([]byte("Malformed Request. Expected an array of property IRIs"))
-// 			return
-// 		}
-// 		// fmt.Println(properties)
-
-// 		list := []*schematree.IItem{}
-// 		for _, pString := range properties {
-// 			p, ok := pMap["http://www.wikidata.org/prop/direct/"+pString]
-// 			if ok {
-// 				list = append(list, p)
-// 			}
-// 		}
-// 		// fmt.Println(schema.Support(list), schema.Root.Support)
-
-// 		t1 := time.Now()
-// 		rec := schema.RecommendProperty(list)
-// 		fmt.Println(time.Since(t1))
-
-// 		res := []string{}
-// 		for _, r := range rec {
-// 			if strings.HasPrefix(*r.Property.Str, "http://www.wikidata.org/prop/direct/") {
-// 				res = append(res, strings.TrimPrefix(*r.Property.Str, "http://www.wikidata.org/prop/direct/"))
-// 			}
-// 		}
-
-// 		w.Header().Set("Content-Type", "application/json")
-// 		json.NewEncoder(w).Encode(res)
-// 	}
-
-// 	http.HandleFunc("/recommender", recommender)
-// 	http.HandleFunc("/wikiRecommender", wikiRecommender)
-// 	go http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", port), nil)
-// 	fmt.Printf("Now listening on port %v\n", port)
-// }

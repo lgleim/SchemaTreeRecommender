@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"log"
 	"os"
 	"recommender/io"
 	recIO "recommender/io"
@@ -70,8 +69,12 @@ func BuildGlossary(filePath string) (*Glossary, error) {
 			continue
 		}
 
+		// IRIREFs get stripped of their enclosing '< >' when they are stored.
+		// TODO: See if the entire system (schematree as well) works with or without enclosing tags.
+		iri := io.InterpreteIriRef(trip.Subject)
+
 		// Create the entry if it doesn't exist yet.
-		thisKey := &Key{string(trip.Subject), string(lang)}
+		thisKey := &Key{string(iri), string(lang)}
 		thisContent, thisContentOk := glos[*thisKey]
 		if !thisContentOk {
 			thisContent = &Content{}
@@ -93,35 +96,32 @@ func BuildGlossary(filePath string) (*Glossary, error) {
 	return &glos, nil
 }
 
-// Output the glossary to stdout.
-func (glos *Glossary) Output() {
-	fmt.Println(*glos)
-	// b, err := json.MarshalIndent(*glos, "", "  ")
-	// if err == nil {
-	// 	fmt.Println(string(b))
-	// } else {
-	// 	fmt.Println(err)
-	// }
+// OutputStats of the glossary to stdout.
+func (glos *Glossary) OutputStats() {
+	fmt.Printf("Glossary: numEntries = %d\n", len(*glos))
 	return
 }
 
+// WriteToFile will serialize the glossary into a binary file.
 func (glos *Glossary) WriteToFile(path string) {
-	f, _ := os.Create(path + ".bin")
+	f, _ := os.Create(path)
 	e := gob.NewEncoder(f)
 	e.Encode(*glos)
 	f.Close()
 }
 
-func ReadFromFile(path string) (glos *Glossary) {
+// ReadFromFile reads a binary file and de-serializes it into a glossary.
+func ReadFromFile(path string) (*Glossary, error) {
+	var glos *Glossary
 	f, err := os.Open(path)
 	if err != nil {
-		log.Fatalln("Failed to open file!", err)
+		return nil, err // "Failed to open file!"
 	}
 	decoder := gob.NewDecoder(f)
 	err = decoder.Decode(&glos)
 	if err != nil {
-		log.Fatalln("Failed to decode glossary!", err)
+		return nil, err // "Failed to decode glossary!"
 	}
 	f.Close()
-	return
+	return glos, nil
 }
