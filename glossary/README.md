@@ -15,11 +15,11 @@ Labels and descriptions are just a type of property that has special handling by
 
 * for Entities:
     * Labels: 
-        * <http://www.w3.org/2000/01/rdf-schema#label> 
-        * <http://www.w3.org/2004/02/skos/core#prefLabel> 
-        * <http://schema.org/name> 
+        * <http://www.w3.org/2000/01/rdf-schema#label>
+        * <http://www.w3.org/2004/02/skos/core#prefLabel> (currently not used)
+        * <http://schema.org/name> (currently not used)
     * Descriptions: 
-        * <http://schema.org/description>
+        * <http://schema.org/description> 
 * for Properties:
     * Labels:
         * <http://www.w3.org/2000/01/rdf-schema#label>
