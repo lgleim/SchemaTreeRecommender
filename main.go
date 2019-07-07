@@ -6,17 +6,18 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
-
-	"github.com/spf13/cobra"
-
+	"recommender/configuration"
 	"recommender/glossary"
 	"recommender/schematree"
 	"recommender/server"
 	"recommender/splitter"
 	"recommender/strategy"
+
+	"runtime"
+	"runtime/pprof"
+	"runtime/trace"
+
+	"github.com/spf13/cobra"
 )
 
 func main() {
@@ -28,8 +29,8 @@ func main() {
 	var cpuprofile, memprofile, traceFile string // used globally
 	var firstNsubjects int64                     // used by build-tree
 	var writeOutPropertyFreqs bool               // used by build-tree
-	var strategyName string                      // used by serve
 	var serveOnPort int                          // used by serve
+	var workflowFile string                      // used by serve
 	var everyNthSubject uint                     // used by split-dataset:1-in-n
 
 	// writeOutPropertyFreqs := flag.Bool("writeOutPropertyFreqs", false, "set this to write the frequency of all properties to a csv after first pass or schematree loading")
@@ -175,8 +176,27 @@ func main() {
 			}
 			schematree.PrintMemUsage()
 
-			// Fetch the strategy by name. (TODO)
-			workflow := strategy.MakePresetWorkflow(strategyName, schema)
+			// read config file if given as parameter, test if everything needed is there, create a workflow
+			// if no config file is given, the standard recommender is set as workflow.
+			var workflow *strategy.Workflow
+			if workflowFile != "" {
+				config, err := configuration.ReadConfigFile(&workflowFile)
+				if err != nil {
+					log.Panicln(err)
+				}
+				err = config.Test()
+				if err != nil {
+					log.Panicln(err)
+				}
+				workflow, err = configuration.ConfigToWorkflow(config, schema)
+				if err != nil {
+					log.Panicln(err)
+				}
+				log.Printf("Run Config Workflow %v", workflowFile)
+			} else {
+				workflow = strategy.MakePresetWorkflow("direct", schema)
+				fmt.Printf("Run Standard Recommender ")
+			}
 
 			// Initiate the HTTP server. Make it stop on <Enter> press.
 			router := server.SetupEndpoints(schema, workflow)
@@ -188,8 +208,7 @@ func main() {
 	// cmdBuildTree.Flags().StringVarP(&treeBinary, "tree", "t", "", "read stored schematree from `file`")
 	// cmdBuildTree.MarkFlagRequired("load")
 	cmdServe.Flags().IntVarP(&serveOnPort, "port", "p", 8080, "`port` of http server")
-	cmdServe.Flags().StringVarP(&strategyName, "strategy", "s", "direct", "`name` of strategy to use")
-
+	cmdServe.Flags().StringVarP(&workflowFile, "workflow", "w", "", "`path` to config file that defines the workflow")
 	// subcommand visualize
 	cmdBuildDot := &cobra.Command{
 		Use:   "build-dot <tree>",

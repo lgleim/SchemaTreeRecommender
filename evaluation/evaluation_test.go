@@ -1,6 +1,7 @@
 package main
 
 import (
+	"recommender/configuration"
 	"recommender/schematree"
 	"recommender/strategy"
 	"testing"
@@ -24,12 +25,12 @@ func TestEval(t *testing.T) {
 }
 
 func TestReadWriteConfigFile(t *testing.T) {
-	l1 := Layer{"tooFewRecommendation", "splitProperty", 100, 0.6, "avg", "everySecondItem", "", 0}
-	cOut := Configuration{"../testdata/10M.nt_1in2_test.gz", []Layer{l1, l1}}
-	fileName := "test"
+	l1 := configuration.Layer{"tooFewRecommendation", "splitProperty", 100, 0.6, "avg", "everySecondItem", "", 0}
+	cOut := configuration.Configuration{"../testdata/10M.nt_1in2_test.gz", []configuration.Layer{l1, l1}}
+	fileName := "./configs/test.json"
 	writeConfigFile(&cOut, fileName)
 
-	cIn, err := readConfigFile(&fileName)
+	cIn, err := configuration.ReadConfigFile(&fileName)
 	if err != nil {
 		t.Errorf("Read was not possible")
 	}
