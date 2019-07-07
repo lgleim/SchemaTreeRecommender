@@ -12,7 +12,7 @@ There are two type of config files:
     "Steps":["stepsizeLinear","stepsizeProportional"], // Stepsizefunction for the deleteLowFrequency Backoff Strat
     "MaxThreshold": 3, // maximal Threshold for the condition Conds
     "MaxParallel": 4, // maximal Threshold for parallel executions in the deleteLowFrequency Backoff
-    "MaxFloatThreshold": 0 // maximal threshold for too unlikely matches condition
+    "MaxFloat": 0 // maximal threshold for too unlikely matches condition
 }`
 
 ### Structure of the Workflow Config File:
