@@ -3,7 +3,7 @@
  "Merger": ["max","avg"],
  "Splitter": ["everySecondItem", "twoSupportRanges"],
  "Steps":["stepsizeLinear","stepsizeProportional"],
- "MaxThreshold": 3,
+ "MaxThreshold": 10,
  "MaxParallel": 4,
- "MaxFloatThreshold": 0
+ "MaxFloat": 0.1
 }
