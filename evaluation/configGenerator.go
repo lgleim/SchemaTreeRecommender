@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"recommender/configuration"
 )
 
 type creater struct {
@@ -19,7 +20,7 @@ type creater struct {
 
 func readCreaterConfig(name *string) (conf *creater, err error) {
 	var c creater
-	file, err := ioutil.ReadFile("./configs/" + *name + ".json")
+	file, err := ioutil.ReadFile(*name)
 	if err != nil {
 		return
 	}
@@ -33,8 +34,8 @@ func createConfigFiles(creater *string) (err error) {
 
 	createrConfig, err := readCreaterConfig(creater)
 
-	fallbackLayer := Layer{"always", "standard", 0, 0.0, "", "", "", 0}
-	backoffLayers := make([]Layer, 0, 0)
+	fallbackLayer := configuration.Layer{"always", "standard", 0, 0.0, "", "", "", 0}
+	backoffLayers := make([]configuration.Layer, 0, 0)
 
 	//conds := []string{"tooFewRecommendations"} //  "tooManyRecommendations", "aboveThreshold", "tooFewRecommendations",tooUnlikelyRecommendationsCondition
 	//merger := []string{"max", "avg"}
@@ -52,11 +53,11 @@ func createConfigFiles(creater *string) (err error) {
 					if con == "tooUnlikelyRecommendationsCondition" {
 						var fthresh float32
 						for fthresh = 0.1; fthresh <= createrConfig.MaxFloatThresh; fthresh++ {
-							l := Layer{con, "splitProperty", thresh, fthresh, m, s, "", 0}
+							l := configuration.Layer{con, "splitProperty", thresh, fthresh, m, s, "", 0}
 							backoffLayers = append(backoffLayers, l)
 						}
 					} else {
-						l := Layer{con, "splitProperty", thresh, 0.0, m, s, "", 0}
+						l := configuration.Layer{con, "splitProperty", thresh, 0.0, m, s, "", 0}
 						backoffLayers = append(backoffLayers, l)
 					}
 				}
@@ -67,11 +68,11 @@ func createConfigFiles(creater *string) (err error) {
 					if con == "tooUnlikelyRecommendationsCondition" {
 						var fthresh float32
 						for fthresh = 0.1; fthresh <= createrConfig.MaxFloatThresh; fthresh++ {
-							l := Layer{con, "deleteLowFrequency", thresh, fthresh, "", "", s, parallel}
+							l := configuration.Layer{con, "deleteLowFrequency", thresh, fthresh, "", "", s, parallel}
 							backoffLayers = append(backoffLayers, l)
 						}
 					} else {
-						l := Layer{con, "deleteLowFrequency", thresh, 0.00, "", "", s, parallel}
+						l := configuration.Layer{con, "deleteLowFrequency", thresh, 0.00, "", "", s, parallel}
 						backoffLayers = append(backoffLayers, l)
 					}
 				}
@@ -81,7 +82,7 @@ func createConfigFiles(creater *string) (err error) {
 
 	// create config files from backoff layers
 	for i, l := range backoffLayers {
-		c := Configuration{"../testdata/10M.nt_1in2_test.gz", []Layer{l, fallbackLayer}}
+		c := configuration.Configuration{"../testdata/10M.nt_1in2_test.gz", []configuration.Layer{l, fallbackLayer}}
 		err = writeConfigFile(&c, fmt.Sprintf("config_%v", i))
 		if err != nil {
 			log.Fatal("could not write config file ", err)
@@ -92,12 +93,12 @@ func createConfigFiles(creater *string) (err error) {
 }
 
 // write config file ./configs/<name>.json to Configuration struct
-func writeConfigFile(config *Configuration, name string) (err error) {
+func writeConfigFile(config *configuration.Configuration, name string) (err error) {
 	// encode/marshal directly with json because marshal is not implemented in viper
 	file, err := json.Marshal(*config)
 	if err != nil {
 		return err
 	}
-	err = ioutil.WriteFile("./configs/"+name+".json", file, 0777)
+	err = ioutil.WriteFile(name, file, 0777)
 	return
 }
