@@ -6,12 +6,21 @@ import (
 	recIO "recommender/io"
 )
 
+// SplitByTypeStats are the stats related to the split operation.
+// TODO: Maybe these types of Stats returns should also tell use where the files have been stored.
+type SplitByTypeStats struct {
+	MiscCount int
+	ItemCount int
+	PropCount int
+}
+
 // SplitByType will take a dataset and generate smaller datasets for each subject type it finds.
 // Types can be of following: item, property, other/miscellaneous
 //
 // TODO: Maybe there is a need to remove the type-classifying predicates. It that happens
 //       then it should be made as an optional argument.
-func SplitByType(filePath string) error {
+func SplitByType(filePath string) (*SplitByTypeStats, error) {
+	stats := SplitByTypeStats{}
 
 	// Setup attributes of the wikidata ontology
 	var wdTypePredicate = []byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")
@@ -21,7 +30,7 @@ func SplitByType(filePath string) error {
 	// Get a N-Triple parser for the input file.
 	tParser, err := recIO.NewTripleParser(filePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tParser.Close()
 
@@ -31,11 +40,14 @@ func SplitByType(filePath string) error {
 		itemBlock = iota
 		propBlock = iota
 	)
-	fileBase := recIO.TrimCompressionExtension(filePath)
+	fileBase := filePath // recIO.TrimCompressionExtension(filePath)
+
 	itemFile := recIO.CreateAndOpenWithGzip(fileBase + ".item.gz")
 	defer itemFile.Close()
+
 	propFile := recIO.CreateAndOpenWithGzip(fileBase + ".prop.gz")
 	defer propFile.Close()
+
 	miscFile := recIO.CreateAndOpenWithGzip(fileBase + ".misc.gz")
 	defer miscFile.Close()
 
@@ -43,7 +55,8 @@ func SplitByType(filePath string) error {
 	// type predicate is found it is noted so that the code knows where to send the block of entries.
 	var tempBuffer bytes.Buffer
 	var curBlockSubject []byte // subject of the current block, used to check if we proceeded to another block
-	curBlockType := miscBlock  // type of the current block
+	tempCount := 0
+	curBlockType := miscBlock // type of the current block
 	for trip, err := tParser.NextTriple(); err == nil; trip, err = tParser.NextTriple() {
 
 		// Check if the subject of the block has changed, or it terminated.
@@ -53,16 +66,20 @@ func SplitByType(filePath string) error {
 			switch curBlockType {
 			case itemBlock:
 				tempBuffer.WriteTo(itemFile)
+				stats.ItemCount += tempCount
 			case propBlock:
 				tempBuffer.WriteTo(propFile)
+				stats.PropCount += tempCount
 			default:
 				tempBuffer.WriteTo(miscFile)
+				stats.MiscCount += tempCount
 			}
 
 			// Set the new subject to identify this new block
 			if trip != nil {
 				curBlockSubject = trip.Subject
 				curBlockType = miscBlock
+				tempCount = 0
 			}
 		}
 
@@ -83,10 +100,11 @@ func SplitByType(filePath string) error {
 		// Put this in the buffer
 		tempBuffer.Write(trip.Line)
 		tempBuffer.Write([]byte("\r\n")) // have to write the newline
+		tempCount++
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &stats, nil
 }

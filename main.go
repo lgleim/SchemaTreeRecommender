@@ -12,6 +12,7 @@ import (
 	"recommender/server"
 	"recommender/splitter"
 	"recommender/strategy"
+	"time"
 
 	"runtime"
 	"runtime/pprof"
@@ -27,11 +28,15 @@ func main() {
 
 	// Setup the variables where all flags will reside.
 	var cpuprofile, memprofile, traceFile string // used globally
+	var measureTime bool                         // used globally
 	var firstNsubjects int64                     // used by build-tree
 	var writeOutPropertyFreqs bool               // used by build-tree
 	var serveOnPort int                          // used by serve
 	var workflowFile string                      // used by serve
 	var everyNthSubject uint                     // used by split-dataset:1-in-n
+
+	// Setup helper variables
+	var timeCheckpoint time.Time // used globally
 
 	// writeOutPropertyFreqs := flag.Bool("writeOutPropertyFreqs", false, "set this to write the frequency of all properties to a csv after first pass or schematree loading")
 
@@ -64,10 +69,21 @@ func main() {
 				}
 			}
 
+			// measure time - start measuring the time
+			//   The measurements are done in such a way to not include the time for the profiles operations.
+			if measureTime == true {
+				timeCheckpoint = time.Now()
+			}
+
 		},
 
 		// Close whatever profiling was running globally.
 		PersistentPostRun: func(cmd *cobra.Command, args []string) {
+
+			// measure time - stop time measurement and print the measurements
+			if measureTime == true {
+				fmt.Println("Execution Time:", time.Since(timeCheckpoint))
+			}
 
 			// write cpu profile to file - stop profiling
 			if cpuprofile != "" {
@@ -99,6 +115,7 @@ func main() {
 	cmdRoot.PersistentFlags().StringVar(&cpuprofile, "cpuprofile", "", "write cpu profile to `file`")
 	cmdRoot.PersistentFlags().StringVar(&memprofile, "memprofile", "", "write memory profile to `file`")
 	cmdRoot.PersistentFlags().StringVar(&traceFile, "trace", "", "write execution trace to `file`")
+	cmdRoot.PersistentFlags().BoolVarP(&measureTime, "time", "t", false, "measure time of command execution")
 
 	// subcommand build-tree
 	cmdBuildTree := &cobra.Command{
@@ -208,7 +225,7 @@ func main() {
 
 			// Initiate the HTTP server. Make it stop on <Enter> press.
 			router := server.SetupEndpoints(model, glos, workflow, 500)
-			fmt.Printf("Now listening on port %v\n", serveOnPort)
+			fmt.Printf("Now listening on 0.0.0.0:%v\n", serveOnPort)
 			http.ListenAndServe(fmt.Sprintf("0.0.0.0:%v", serveOnPort), router)
 
 			// Note: Code before started server as sub-routine and waited for return.
@@ -288,7 +305,20 @@ func main() {
 
 		Run: func(cmd *cobra.Command, args []string) {
 			inputDataset := &args[0]
-			splitter.SplitByType(*inputDataset)
+
+			// Make the split
+			sStats, err := splitter.SplitByType(*inputDataset)
+			if err != nil {
+				log.Panicln(err)
+			}
+
+			// Prepare and output the stats for it
+			totalCount := float64(sStats.ItemCount + sStats.PropCount + sStats.MiscCount)
+			fmt.Println("Split dataset by type:")
+			fmt.Printf("  item: %d (%f)\n", sStats.ItemCount, float64(sStats.ItemCount)/totalCount)
+			fmt.Printf("  prop: %d (%f)\n", sStats.PropCount, float64(sStats.PropCount)/totalCount)
+			fmt.Printf("  misc: %d (%f)\n", sStats.MiscCount, float64(sStats.MiscCount)/totalCount)
+
 		},
 	}
 
