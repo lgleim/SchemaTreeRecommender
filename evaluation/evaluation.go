@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"recommender/assessment"
+	"recommender/configuration"
 	"recommender/schematree"
 	"recommender/strategy"
 	"runtime"
@@ -31,6 +32,7 @@ func main() {
 	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
 	traceFile := flag.String("trace", "", "write execution trace to `file`")
 	trainedModel := flag.String("model", "", "read stored schematree from `file`")
+	configPath := flag.String("workflow", "", "Path to workflow config file for single evaluation")
 	testFile := flag.String("testSet", "", "the file to parse")
 	batchTest := flag.Bool("batchTest", false, "Switch between batch test and normal test")
 	createConfigs := flag.Bool("createConfigs", false, "Create a bunch of config")
@@ -132,7 +134,27 @@ func main() {
 			if err != nil {
 				log.Fatalln(err)
 			}
-			stats, _ = evaluation(tree, testFile, strategy.MakePresetWorkflow("direct", tree), typedEntities)
+
+			var wf *strategy.Workflow
+			if *configPath != "" {
+				//load workflow config if given
+				config, err := configuration.ReadConfigFile(configPath)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				err = config.Test()
+				if err != nil {
+					log.Fatalln(err)
+				}
+				wf, err = configuration.ConfigToWorkflow(config, tree)
+				if err != nil {
+					log.Fatalln(err)
+				}
+			} else {
+				// if no workflow config given then run standard recommender
+				wf = strategy.MakePresetWorkflow("direct", tree)
+			}
+			stats, _ = evaluation(tree, testFile, wf, typedEntities)
 
 			f, _ := os.Create(*testFile + ".eval")
 			e := gob.NewEncoder(f)
