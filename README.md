@@ -24,7 +24,7 @@ Individual descriptions in subfolders.
 ./recommender split-dataset by-type ./testdata/handcrafted.nt
 
 # Prepare the dataset and build the Schema Tree
-# (TODO: shorten the big file names)
+# (TODO: add commands for Typed Schema Trees)
 ./recommender filter-dataset for-schematree ./testdata/handcrafted.nt.item.gz 
 ./recommender build-tree ./testdata/handcrafted.nt.item.gz.filtered.gz
 
@@ -33,6 +33,7 @@ Individual descriptions in subfolders.
 ./recommender build-glossary ./testdata/handcrafted.nt.prop.gz.filtered.gz
 
 # Start the server 
+# (TODO: shorten the big file names)
 # (TODO: add information about workflow strategies)
 ./recommender serve ./testdata/handcrafted.nt.item.gz.filtered.gz.schemaTree.bin ./testdata/handcrafted.nt.prop.gz.filtered.gz.glossary.bin
 

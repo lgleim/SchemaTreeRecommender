@@ -1,0 +1,49 @@
+# Miscellaneous
+<local://meta/Dataset> <local://meta/Name> "Handcrafted"
+
+# Items - Part 1
+<local://item/Vehicle> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Item>
+<local://item/Vehicle> <http://schema.org/name> "Vehicle"@en
+<local://item/Vehicle> <http://schema.org/description> "Machine to ease transportation"@en
+<local://item/Bicycle> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Item>
+<local://item/Bicycle> <http://schema.org/name> "Bicycle"@en
+<local://item/Bicycle> <http://schema.org/description> "Non-motorized bipedal vehicle"@en
+<local://item/Bicycle> <http://www.wikidata.org/prop/direct/P31> <local://item/Vehicle>
+<local://item/Bicycle> <local://prop/Has> <local://item/Wheel>
+<local://item/Bicycle> <local://prop/Alloy> "Carbon-Reinforced Steel"
+<local://item/Bicycle> <local://prop/Color> "#22D"
+<local://item/Wheel> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Item>
+<local://item/Wheel> <http://schema.org/name> "Wheel"@en
+<local://item/Wheel> <http://schema.org/description> "Round object to ease friction in movement"@en
+<local://item/Wheel> <local://prop/Alloy> "Rust-free Iron"
+<local://item/Wheel> <local://prop/Color> "#555"
+
+# Properties
+<local://prop/Has> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Property>
+<local://prop/Has> <http://schema.org/name> "has"@en
+<local://prop/Has> <http://schema.org/description> "contains in it"@en
+<local://prop/Has> <http://schema.org/name> "contêm"@pt-pt
+<local://prop/Has> <http://schema.org/description> "Contêm em si o objecto"@pt-pt
+<local://prop/Alloy> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Property>
+<local://prop/Alloy> <http://schema.org/name> "alloy"@en
+<local://prop/Alloy> <http://schema.org/description> "Alloy used for construction"@en
+<local://prop/Color> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Property>
+<local://prop/Color> <http://schema.org/name> "color"@en
+<local://prop/Color> <http://schema.org/description> "Color represented hexadecimal format"@en
+<local://prop/Acidity> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Property>
+<local://prop/Acidity> <http://schema.org/name> "acidez"@pt-pt
+<local://prop/Acidity> <http://schema.org/description> "Acidez representada na escala ph"@pt-pt
+
+# Items - Part 2
+<local://item/ChemicalComponent> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Item>
+<local://item/ChemicalComponent> <http://schema.org/name> "Chemical Component"@en
+<local://item/ChemicalComponent> <http://schema.org/description> "Chemical component or mixture"@en
+<local://item/ClassicalElement> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Item>
+<local://item/ClassicalElement> <http://schema.org/name> "Classical Element"@en
+<local://item/ClassicalElement> <http://schema.org/description> "Element as defined by the greeks"@en
+<local://item/Water> <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <http://wikiba.se/ontology#Item>
+<local://item/Water> <http://schema.org/name> "Water"@en
+<local://item/Water> <http://schema.org/description> "Liquid composition of H20"@en
+<local://item/Water> <http://www.wikidata.org/prop/direct/P31> <local://item/ClassicalElement>
+<local://item/Water> <http://www.wikidata.org/prop/direct/P31> <local://item/ChemicalComponent>
+<local://item/Water> <local://prop/Acidity> "7"
