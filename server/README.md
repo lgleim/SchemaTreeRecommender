@@ -34,6 +34,24 @@ Input JSON-Schema:
     }
 ```
 
+Example input: 
+
+```json
+{
+  "lang": "en",
+  "properties": [
+    "http://www.wikidata.org/prop/direct/P31",
+    "http://www.wikidata.org/prop/direct/P1476",
+    "http://www.wikidata.org/prop/direct/P433"
+  ],
+  "types": [
+    "http://www.wikidata.org/entity/Q13442814"
+  ]
+}
+```
+
+To make the typed SchemaTree more compatible with type-unaware clients, the P31 (instanceOf) property should also be allowed to exist in the `$.properties` attribute.
+
 Output JSON-Schema:
 
 ```json
@@ -58,6 +76,10 @@ Output JSON-Schema:
     	"required": ["recommendations"]
 	}
 ```
+
+Example Output:
+
+TODO
 
 ### /lean-recommender
 
