@@ -14,16 +14,15 @@ import (
 type SchemaNode struct {
 	ID     *IItem
 	parent *SchemaNode
-	// Children map[*iItem]*SchemaNode
+	// Children map[*iItem]*schemaNode
 	Children   []*SchemaNode
-	nextSameID *SchemaNode       // node traversal pointer
-	Support    uint32            // total frequency of the node in the path
-	Types      map[*iType]uint32 //[]*iType    // RDFS class - nonempty only for tail nodes
+	nextSameID *SchemaNode // node traversal pointer
+	Support    uint32      // total frequency of the node in the path
 }
 
 func newRootNode(pMap propMap) SchemaNode {
-	// return SchemaNode{newRootiItem(), nil, make(map[*iItem]*SchemaNode), nil, 0, nil}
-	return SchemaNode{pMap.get("root"), nil, []*SchemaNode{}, nil, 0, nil}
+	// return schemaNode{newRootiItem(), nil, make(map[*iItem]*schemaNode), nil, 0, nil}
+	return SchemaNode{pMap.get("root"), nil, []*SchemaNode{}, nil, 0}
 }
 
 func (node *SchemaNode) writeGob(e *gob.Encoder) error {
@@ -51,16 +50,10 @@ func (node *SchemaNode) writeGob(e *gob.Encoder) error {
 		}
 	}
 
-	// Types
-	types := make(map[uintptr]uint32)
-	for t, count := range node.Types {
-		types[uintptr(unsafe.Pointer(t))] = count
-	}
-	err = e.Encode(types)
-	return err
+	return nil
 }
 
-func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintptr]*iType) error {
+func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem) error {
 	// function scoping to allow for garbage collection
 	// err := func() error {
 	// ID
@@ -93,8 +86,8 @@ func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintp
 	// 	return nil
 	// }()
 	for i := range node.Children {
-		node.Children[i] = &SchemaNode{nil, node, nil, nil, 0, nil}
-		err = node.Children[i].decodeGob(d, props, tMap)
+		node.Children[i] = &SchemaNode{nil, node, nil, nil, 0}
+		err = node.Children[i].decodeGob(d, props)
 		// for i := 0; i < length; i++ {
 		// 	child := &SchemaNode{nil, node, nil, nil, 0, nil}
 		// 	err = child.decodeGob(d, props, tMap)
@@ -108,54 +101,11 @@ func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem, tMap map[uintp
 	// 	return uintptr(unsafe.Pointer(node.Children[i].ID)) < uintptr(unsafe.Pointer(node.Children[j].ID))
 	// })
 
-	// Types
-	var types map[uintptr]uint32
-	err = d.Decode(&types)
-	if err != nil {
-		return err
-	}
-
-	if len(types) > 0 {
-		node.Types = make(map[*iType]uint32)
-		for t, count := range types {
-			node.Types[tMap[t]] = count
-		}
-	}
-
 	return nil
 }
 
 func (node *SchemaNode) incrementSupport() {
 	atomic.AddUint32(&node.Support, 1)
-}
-
-/// structures & logic for handling types annotations in SchemaNodes
-var typeChan chan struct {
-	node  *SchemaNode
-	types []*iType
-}
-
-func (node *SchemaNode) insertTypes(types []*iType) {
-	typeChan <- struct {
-		node  *SchemaNode
-		types []*iType
-	}{node, types}
-}
-
-func typeInsertionWorker() {
-	for ts := range typeChan {
-		// update typ "counts" at tail
-		if len(ts.types) > 0 {
-			m := ts.node.Types
-			if m == nil {
-				ts.node.Types = make(map[*iType]uint32)
-				m = ts.node.Types
-			}
-			for _, t := range ts.types {
-				m[t]++
-			}
-		}
-	}
 }
 
 // thread-safe!
@@ -227,7 +177,7 @@ func (node *SchemaNode) getChild(term *IItem) *SchemaNode {
 	// child not found, but i is the index where it would be inserted.
 	// create a new one...
 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
-	newChild := &SchemaNode{term, node, []*SchemaNode{}, term.traversalPointer, 0, nil}
+	newChild := &SchemaNode{term, node, []*SchemaNode{}, term.traversalPointer, 0}
 	term.traversalPointer = newChild
 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
 

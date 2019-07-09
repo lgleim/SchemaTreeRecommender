@@ -6,8 +6,8 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"runtime"
 	"recommender/schematree"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -70,9 +70,9 @@ func main() {
 		wg.Done()
 	}()
 
-	tree := schematree.NewSchemaTree()
+	tree := schematree.NewSchemaTree(false, 1)
 
-	subjectCount := schematree.SubjectSummaryReader(*testFile, tree.PropMap, tree.TypeMap, handler, 0)
+	subjectCount := schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
 	logr.Printf("\nEvaluation with total of %v subject sets!\n", subjectCount)
 	close(results)
 	wg.Wait()

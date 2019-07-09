@@ -17,6 +17,7 @@
 *.out
 
 !10M.nt.gz.schemaTree.bin
+!10M.nt.gz.schemaTree.typed.bin
 !10M.nt.gz
 !10M.nt_1in2_test.gz
 !10M.nt_1in2_train.gz

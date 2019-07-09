@@ -42,7 +42,7 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	// write cpu profile to file
+	// write memory profile to file
 	if *memprofile != "" {
 		defer func() {
 			f, err := os.Create(*memprofile)
@@ -57,7 +57,7 @@ func main() {
 		}()
 	}
 
-	// write cpu profile to file
+	// write trace file to file
 	if *traceFile != "" {
 		f, err := os.Create(*traceFile)
 		if err != nil {
@@ -79,7 +79,7 @@ func main() {
 			fmt.Println(err)
 		}
 	} else {
-		schema = schematree.NewSchemaTree()
+		schema = schematree.NewSchemaTree(false, 1)
 		schema.TwoPass(*fileName, uint64(*firstNsubjects))
 		schema.Save(*fileName + ".schemaTree.bin")
 	}
@@ -89,6 +89,9 @@ func main() {
 	if *writeOutPropertyFreqs {
 		schema.WritePropFreqs("propertyFreqs.csv")
 		fmt.Println("Wrote PropertyFreqs to propertyFreqs.csv")
+
+		schema.WriteTypeFreqs("typeFreqs.csv")
+		fmt.Println("Wrote TypeFreqs to typeFreqs.csv")
 	}
 
 	if *visualize {
