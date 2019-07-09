@@ -1,6 +1,8 @@
 package schematree
 
-import "testing"
+import (
+	"testing"
+)
 
 // func TestTimeConsuming(t *testing.T) {
 //     if testing.Short() {
@@ -28,7 +30,7 @@ func emptyRootNodeTest(root SchemaNode, t *testing.T) {
 }
 
 func TestSchemaTree(t *testing.T) {
-	tree := NewSchemaTree()
+	tree := NewSchemaTree(true, 1)
 
 	t.Run("Root is a proper empty root node", func(t *testing.T) { emptyRootNodeTest(tree.Root, t) })
 

@@ -3,43 +3,10 @@ package schematree
 import (
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
-
-// Class statistics
-// - a string IRI (str) and
-// - its support, i.e. its total number of occurrences (totalCount)
-type iType struct {
-	Str        *string
-	TotalCount uint64
-}
-
-func (t *iType) increment() {
-	atomic.AddUint64(&t.TotalCount, 1)
-}
-
-type typeMap map[string]*iType
-
-var typeMapLock sync.Mutex
-
-// thread-safe
-func (m *typeMap) get(iri string) (item *iType) {
-	item, ok := (*m)[iri]
-	if !ok {
-		typeMapLock.Lock()
-		defer typeMapLock.Unlock()
-
-		// recheck existence - might have been created by other thread
-		if item, ok = (*m)[iri]; ok {
-			return
-		}
-
-		item = &iType{&iri, 0}
-		(*m)[iri] = item
-	}
-	return
-}
 
 // A struct capturing
 // - a string IRI (str) and
@@ -54,6 +21,16 @@ type IItem struct {
 
 func (p *IItem) increment() {
 	atomic.AddUint64(&p.TotalCount, 1)
+}
+
+var typePrefix = "t#"
+
+func (p *IItem) isType() bool {
+	return strings.HasPrefix(*p.Str, typePrefix)
+}
+
+func (p *IItem) isProp() bool {
+	return !strings.HasPrefix(*p.Str, typePrefix)
 }
 
 func (p IItem) String() string {
@@ -80,6 +57,19 @@ func (m propMap) get(iri string) (item *IItem) { // TODO: Implement sameas Mappi
 		m[iri] = item
 	}
 	return
+}
+
+func (p propMap) count() (int, int) {
+	props := 0
+	types := 0
+	for _, item := range p {
+		if item.isType() {
+			types++
+		} else {
+			props++
+		}
+	}
+	return props, types
 }
 
 // An array of pointers to IRI structs
@@ -116,6 +106,29 @@ func (l IList) toSet() map[*IItem]bool {
 	return pSet
 }
 
+func (l IList) count() (int, int) {
+	props := 0
+	types := 0
+	for _, item := range l {
+		if item.isType() {
+			types++
+		} else {
+			props++
+		}
+	}
+	return props, types
+}
+
+func (l IList) removeTypes() IList {
+	nl := IList{}
+	for _, item := range l {
+		if !item.isType() {
+			nl = append(nl, item)
+		}
+	}
+	return nl
+}
+
 func (l IList) String() string {
 	//// list representation (includes duplicates)
 	o := "[ "
@@ -130,46 +143,4 @@ func (l IList) String() string {
 	// 	ctr[p[i].str]++
 	// }
 	// return fmt.Sprint(ctr)
-}
-
-// struct to rank suggestions
-type RankedPropertyCandidate struct {
-	Property    *IItem
-	Probability float64
-}
-
-type PropertyRecommendations []RankedPropertyCandidate
-
-func (ps PropertyRecommendations) String() string {
-	s := ""
-	for _, p := range ps {
-		s += fmt.Sprintf("%v: %v\n", *p.Property.Str, p.Probability)
-	}
-	return s
-}
-
-// calculate average of probability of the top ten recommendations
-// if less than 10 recommendations, then missing values have probability 0
-func (ps PropertyRecommendations) Top10AvgProbibility() float32 {
-	var sum float64
-	for i := 0; i < 10; i++ {
-		if i < len(ps) {
-			sum += ps[i].Probability
-		}
-	}
-	return float32(sum) / 10.0
-}
-
-type rankedTypeCandidate struct {
-	Class       *iType
-	Probability float64
-}
-type typeRecommendations []rankedTypeCandidate
-
-func (ts typeRecommendations) String() string {
-	s := ""
-	for _, t := range ts {
-		s += fmt.Sprintf("%v: %v\n", *t.Class.Str, t.Probability)
-	}
-	return s
 }

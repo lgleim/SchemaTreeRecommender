@@ -10,8 +10,8 @@ import (
 // Run all config files defined in ./configs and create a results csv table in ./
 // with schematree in ../testdata/10M.nt.gz.schemaTree.bin
 func batchConfigBenchmark(treePath string, configs int) (err error) {
-	schema := schematree.NewSchemaTree()
-	schema, err = schematree.LoadSchemaTree(treePath)
+
+	schema, err := schematree.LoadSchemaTree(treePath)
 	if err != nil {
 		return err
 	}

@@ -223,7 +223,7 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		wg.Done()
 	}()
 
-	schematree.SubjectSummaryReader(*testFile, tree.PropMap, tree.TypeMap, handler, 0)
+	schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
 	close(results)
 	wg.Wait()
 
