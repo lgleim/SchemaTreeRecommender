@@ -29,7 +29,7 @@ type Glossary map[Key]*Content // glossary[property,language]
 func BuildGlossary(filePath string) (*Glossary, error) {
 
 	// Setup property types of the wikidata ontology
-	var wdLabelPredicate = []byte("<http://www.w3.org/2000/01/rdf-schema#label>")
+	var wdLabelPredicate = []byte("<http://schema.org/name>")
 	var wdDescriptionPredicate = []byte("<http://schema.org/description>")
 
 	// Get a N-Triple parser for the input file.

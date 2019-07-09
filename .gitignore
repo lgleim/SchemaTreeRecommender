@@ -16,11 +16,14 @@
 *.exe
 *.out
 
-!10M.nt.gz.schemaTree.bin
-!10M.nt.gz.schemaTree.typed.bin
+# Include the original dataset (but remove it in the future)
 !10M.nt.gz
-!10M.nt_1in2_test.gz
-!10M.nt_1in2_train.gz
+
+# Things built by the recommender should not be included in the repository
+10M.nt.gz.schemaTree.bin
+10M.nt.gz.schemaTree.typed.bin
+10M.nt_1in2_test.gz
+10M.nt_1in2_train.gz
 
 # Binaries
 recommender
