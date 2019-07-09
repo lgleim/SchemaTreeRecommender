@@ -9,25 +9,25 @@ structure is stored and can later be re-used when the recommender is serving.
 It also contains utilities for filtering lists of properties by certain glossary values.
 
 
-## Notes about what used properties
+## Properties that are used
 
-Labels and descriptions are just a type of property that has special handling by wikidata.
+Labels and descriptions are just a type of property that has special handling by wikidata. They are used
+in the same way for both the Items and Properties.
 
-* for Entities:
-    * Labels: 
-        * <http://www.w3.org/2000/01/rdf-schema#label>
-        * <http://www.w3.org/2004/02/skos/core#prefLabel> (currently not used)
-        * <http://schema.org/name> (currently not used)
-    * Descriptions: 
-        * <http://schema.org/description> 
-* for Properties:
-    * Labels:
-        * <http://www.w3.org/2000/01/rdf-schema#label>
-    * Descriptions: 
-        * <http://schema.org/description>
+* Labels: 
+    * `<http://schema.org/name>` (used by glossary)
+    * `<http://www.w3.org/2000/01/rdf-schema#label>`
+    * `<http://www.w3.org/2004/02/skos/core#prefLabel>`
+    * `<http://www.w3.org/2004/02/skos/core#altLabel>` (alternative name)
+* Descriptions: 
+    * `<http://schema.org/description>` (used by glossary)
 
 Each value is given in the form of `"text"@language`. 
 One example for Belgium in british english is: `"Belgium"@en-gb`
+
+## Notes about Glossary usage
+
+The Glossary is typically only used for properties only, but nothing prevents you from generating a glossary for items as well, though this will not be used by the server.
 
 ## TODO
 

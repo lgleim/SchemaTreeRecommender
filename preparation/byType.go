@@ -1,4 +1,4 @@
-package splitter
+package preparation
 
 import (
 	"bytes"
@@ -24,8 +24,14 @@ func SplitByType(filePath string) (*SplitByTypeStats, error) {
 
 	// Setup attributes of the wikidata ontology
 	var wdTypePredicate = []byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")
-	var wdItemObject = []byte("<http://wikiba.se/ontology-beta#Item>")
-	var wdPropObject = []byte("<http://www.wikidata.org/ontology#Property>")
+	var wdItemObjects = [][]byte{
+		[]byte("<http://wikiba.se/ontology#Item>"),
+		[]byte("<http://wikiba.se/ontology-beta#Item>"), // included for retro-compatibility
+	}
+	var wdPropObjects = [][]byte{
+		[]byte("<http://wikiba.se/ontology#Property>"),
+		[]byte("<http://www.wikidata.org/ontology#Property>"), // included for retro-compatibility
+	}
 
 	// Get a N-Triple parser for the input file.
 	tParser, err := recIO.NewTripleParser(filePath)
@@ -90,9 +96,9 @@ func SplitByType(filePath string) (*SplitByTypeStats, error) {
 
 		// While its a 'misc' block, we hope to find a predicate that identifies the type.
 		if curBlockType == miscBlock && bytes.Equal(trip.Predicate, wdTypePredicate) {
-			if bytes.Equal(trip.Object, wdItemObject) {
+			if equalToOneOf(trip.Object, wdItemObjects) {
 				curBlockType = itemBlock
-			} else if bytes.Equal(trip.Object, wdPropObject) {
+			} else if equalToOneOf(trip.Object, wdPropObjects) {
 				curBlockType = propBlock
 			}
 		}
@@ -107,4 +113,14 @@ func SplitByType(filePath string) (*SplitByTypeStats, error) {
 	}
 
 	return &stats, nil
+}
+
+// equalToOneOf will check if a byte-array is equal to one of the byte-arrays provided in a list.
+func equalToOneOf(needle []byte, haystack [][]byte) bool {
+	for _, hayball := range haystack {
+		if bytes.Equal(needle, hayball) {
+			return true
+		}
+	}
+	return false
 }

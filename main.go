@@ -8,9 +8,9 @@ import (
 	"os"
 	"recommender/configuration"
 	"recommender/glossary"
+	"recommender/preparation"
 	"recommender/schematree"
 	"recommender/server"
-	"recommender/splitter"
 	"recommender/strategy"
 	"time"
 
@@ -310,20 +310,6 @@ func main() {
 			" generate multiple smaller datasets in the same directory and with" +
 			" suffixed names. Suffixes depend on chosen splitter method.",
 		Args: cobra.NoArgs,
-
-		// Run: func(cmd *cobra.Command, args []string) {
-		// inputDataset := &args[0]
-		// inputMethod := &args[1]
-
-		// // inputMethod defines which splitting to perform
-		// switch *inputMethod {
-		// case "by-type":
-		// 	splitter.SplitByType(*inputDataset)
-		// default:
-		// 	fmt.Println("Available methods are: by-type , 1-in-n")
-		// }
-
-		// },
 	}
 
 	// subsubcommand split-dataset by-type
@@ -340,7 +326,7 @@ func main() {
 			inputDataset := &args[0]
 
 			// Make the split
-			sStats, err := splitter.SplitByType(*inputDataset)
+			sStats, err := preparation.SplitByType(*inputDataset)
 			if err != nil {
 				log.Panicln(err)
 			}
@@ -366,15 +352,94 @@ func main() {
 
 		Run: func(cmd *cobra.Command, args []string) {
 			inputDataset := &args[0]
-			splitter.SplitBySampling(*inputDataset, int64(everyNthSubject))
+			preparation.SplitBySampling(*inputDataset, int64(everyNthSubject))
 		},
 	}
 	cmdSplitDatasetBySampling.Flags().UintVarP(&everyNthSubject, "nth", "n", 1000, "split every N-th subject")
+
+	// subcommand filter-dataset
+	cmdFilterDataset := &cobra.Command{
+		Use:   "filter-dataset",
+		Short: "Filter a dataset using various methods",
+		Long:  "Filter the dataset for the purpose of building other models.",
+		Args:  cobra.NoArgs,
+	}
+
+	// subsubcommand filter-dataset for-schematree
+	cmdFilterDatasetForSchematree := &cobra.Command{
+		Use:   "for-schematree <dataset>",
+		Short: "Prepare the dataset for inclusion in the SchemaTree",
+		Long:  "Remove entries that should not be considered by the SchemaTree",
+		Args:  cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+
+			// Execute the filter
+			err := preparation.FilterForSchematree(*inputDataset)
+			if err != nil {
+				log.Panicln(err)
+			}
+
+			// Prepare and output the stats for it
+			// TODO: stats
+
+		},
+	}
+
+	// subsubcommand filter-dataset for-glossary
+	cmdFilterDatasetForGlossary := &cobra.Command{
+		Use:   "for-glossary <dataset>",
+		Short: "Prepare the dataset for inclusion in the Glossary",
+		Long:  "Remove entries that should not be considered by the Glossary",
+		Args:  cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+
+			// Execute the filter
+			err := preparation.FilterForGlossary(*inputDataset)
+			if err != nil {
+				log.Panicln(err)
+			}
+
+			// Prepare and output the stats for it
+			// TODO: stats
+
+		},
+	}
+
+	// subsubcommand filter-dataset for-evaluation
+	cmdFilterDatasetForEvaluation := &cobra.Command{
+		Use:   "for-evaluation <dataset>",
+		Short: "Prepare the dataset for usage in the evaluation",
+		Long: "Remove entries that would not affect the evaluation results but which would make" +
+			" the evaluation slower. Usually the case with multiple labels.",
+		Args: cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+
+			// Execute the filter
+			err := preparation.FilterForEvaluation(*inputDataset)
+			if err != nil {
+				log.Panicln(err)
+			}
+
+			// Prepare and output the stats for it
+			// TODO: stats
+
+		},
+	}
 
 	// putting the command hierarchy together
 	cmdRoot.AddCommand(cmdSplitDataset)
 	cmdSplitDataset.AddCommand(cmdSplitDatasetByType)
 	cmdSplitDataset.AddCommand(cmdSplitDatasetBySampling)
+	cmdRoot.AddCommand(cmdFilterDataset)
+	cmdFilterDataset.AddCommand(cmdFilterDatasetForSchematree)
+	cmdFilterDataset.AddCommand(cmdFilterDatasetForGlossary)
+	cmdFilterDataset.AddCommand(cmdFilterDatasetForEvaluation)
 	cmdRoot.AddCommand(cmdBuildTree)
 	cmdRoot.AddCommand(cmdBuildTreeTyped)
 	cmdRoot.AddCommand(cmdBuildGlossary)
