@@ -35,7 +35,35 @@ func (ps PropertyRecommendations) Top10AvgProbibility() float32 {
 	return float32(sum) / 10.0
 }
 
-// RecommendProperty recommends a ranked list of property candidates
+// Recomend recommends a ranked list of property candidates by given strings
+func (tree *SchemaTree) Recommend(properties []string, types []string) PropertyRecommendations {
+
+	list := []*IItem{}
+	// Find IItems of property strings
+	for _, pString := range properties {
+		p, ok := tree.PropMap[pString]
+		if ok {
+			list = append(list, p)
+		}
+	}
+
+	// Find IItems of type strings
+	for _, tString := range types {
+		tString := "t#" + tString
+		p, ok := tree.PropMap[tString]
+		if ok {
+			list = append(list, p)
+		}
+	}
+
+	// Run the SchemaTree recommender
+	var candidates PropertyRecommendations
+	candidates = tree.RecommendProperty(list)
+
+	return candidates
+}
+
+// RecommendProperty recommends a ranked list of property candidates by given IItems
 func (tree *SchemaTree) RecommendProperty(properties IList) (ranked PropertyRecommendations) {
 
 	if len(properties) > 0 {
