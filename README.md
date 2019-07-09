@@ -1,16 +1,48 @@
-### SchemaTree Recommender
+# SchemaTree Recommender
+
 Individual descriptions in subfolders.
 
-As part of the KGLab only the `treebuilder` subfolder and the `.go` files in this folder are really relevant, since the code for building the tree as well as code for computing recommendations resides in those files/folder.
+## Installation
 
-The code quality is mediocre. More comments will follow.
-
-### Installation
 1. Install the go runtime (and VS Code + Golang tools)
-2. Run `go get .` in this folder to install all dependencies
-3. Compile the individual tools by running `go build .` in the respective folders, most importantly the `treebuilder` folder.
+1. Run `go get .` in this folder to install all dependencies
+1. Run `go build .` in this folder to build the executable
+1. Run `go install .` to install the executable in the $PATH
 
-### Example
+## Example 
+
+```bash
+
+# This example will assume that you are in the top directory.
+
+# Download a dataset, for example the latest 32GB dataset from wikidata
+# curl https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz --output latest-truthy.nt.gz
+# (this example will assume that a dataset called `./data/10M.nt.gz` exists)
+
+# Split the dataset for wikidata items and properties
+# (TODO: The handcrafted dataset has to be improved  with a better combination of entries)
+./recommender split-dataset by-type ./testdata/handcrafted.nt
+
+# Prepare the dataset and build the Schema Tree
+# (TODO: shorten the big file names)
+./recommender filter-dataset for-schematree ./testdata/handcrafted.nt.item.gz 
+./recommender build-tree ./testdata/handcrafted.nt.item.gz.filtered.gz
+
+# Prepare the dataset and build the Glossary
+./recommender filter-dataset for-glossary ./testdata/handcrafted.nt.prop.gz
+./recommender build-glossary ./testdata/handcrafted.nt.prop.gz.filtered.gz
+
+# Start the server 
+# (TODO: add information about workflow strategies)
+./recommender serve ./testdata/handcrafted.nt.item.gz.filtered.gz.schemaTree.bin ./testdata/handcrafted.nt.prop.gz.filtered.gz.glossary.bin
+
+# Test with a request 
+curl -d '{"lang":"en","properties":["local://prop/Color"],"types":[]}' http://localhost:8080/recommender
+
+```
+
+## Example (old case)
+
 ```
 # Build the treebuilder
 cd treebuilder
@@ -31,4 +63,5 @@ curl -d '["P31","P21","P27"]' http://localhost:8080/wikiRecommender
 ```
 
 ### Note
+
 If you want to run on the full wikidata dataset, grab the latest dump from https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz

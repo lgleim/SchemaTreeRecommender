@@ -9,7 +9,7 @@ For each operation a method can be chosen that alters how the split and filter i
 
 * **1-in-n:** Used for splitting datasets into training and test sets. It will filter out every Nth line into a new file.
 
-* **by-type:** Takes a dataset a generates 3 files. One for all items, one for all properties, and one for entries which are neither of the two.
+* **by-type:** Takes a dataset a generates 3 files. One for all items, one for all properties, and one for entries which are neither of the two. This splitter needs to assume that all subjects come in contiguous lines. In other words, the dataset has to be grouped by the subject column.
 
 ## Filtering Methods
 
