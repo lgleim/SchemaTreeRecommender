@@ -12,7 +12,8 @@ func TestEval(t *testing.T) {
 	testData := "../testdata/10M.nt_1in2_test.gz"
 
 	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.bin")
-	stats, resources := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema))
+	f := false
+	stats, resources := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f)
 	statistics := makeStatistics(stats, resources)
 
 	for _, v := range statistics {
