@@ -25,11 +25,11 @@ func (p *IItem) increment() {
 
 var typePrefix = "t#"
 
-func (p *IItem) isType() bool {
+func (p *IItem) IsType() bool {
 	return strings.HasPrefix(*p.Str, typePrefix)
 }
 
-func (p *IItem) isProp() bool {
+func (p *IItem) IsProp() bool {
 	return !strings.HasPrefix(*p.Str, typePrefix)
 }
 
@@ -63,7 +63,7 @@ func (p propMap) count() (int, int) {
 	props := 0
 	types := 0
 	for _, item := range p {
-		if item.isType() {
+		if item.IsType() {
 			types++
 		} else {
 			props++
@@ -110,7 +110,7 @@ func (l IList) count() (int, int) {
 	props := 0
 	types := 0
 	for _, item := range l {
-		if item.isType() {
+		if item.IsType() {
 			types++
 		} else {
 			props++
@@ -122,7 +122,7 @@ func (l IList) count() (int, int) {
 func (l IList) removeTypes() IList {
 	nl := IList{}
 	for _, item := range l {
-		if !item.isType() {
+		if !item.IsType() {
 			nl = append(nl, item)
 		}
 	}

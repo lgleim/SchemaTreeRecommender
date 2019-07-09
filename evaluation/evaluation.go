@@ -214,6 +214,27 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		evaluate(tmp, properties[len(properties)-1])
 	}
 
+	handlerTyped := func(s *schematree.SubjectSummary) {
+		properties := make(schematree.IList, 0, len(s.Properties))
+		for p := range s.Properties {
+			properties = append(properties, p)
+		}
+		properties.Sort()
+
+		// take out one property from the list at a time and determine in which position it will be recommended again
+		tmp := make(schematree.IList, len(properties)-1, len(properties)-1)
+		copy(tmp, properties[1:])
+		for i := range tmp {
+			if properties[i].IsProp() { // Only evaluate if the leftout is a property and not a type
+				evaluate(tmp, properties[i])
+			}
+			tmp[i] = properties[i]
+		}
+		if properties[len(properties)-1].IsProp() {
+			evaluate(tmp, properties[len(properties)-1])
+		}
+	}
+
 	go func() {
 		wg.Add(1)
 		for res := range results {
@@ -223,9 +244,18 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		wg.Done()
 	}()
 
-	schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
-	close(results)
-	wg.Wait()
+	// TODO flag if anfrage
+	// ohne types
+	if false {
+		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
+		close(results)
+		wg.Wait()
+	} else {
+		// else mit types
+		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTyped, 0, true)
+		close(results)
+		wg.Wait()
+	}
 
 	var lenght uint32
 	for _, rank_list := range stats {
