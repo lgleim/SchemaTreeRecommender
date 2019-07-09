@@ -374,7 +374,7 @@ func (tree SchemaTree) WritePropFreqs(file string) {
 
 	f.WriteString("URI;Frequency\n")
 	for uri, item := range tree.PropMap {
-		if item.isProp() {
+		if item.IsProp() {
 			f.WriteString(fmt.Sprintf("%v;%v\n", uri, item.TotalCount))
 		}
 	}
@@ -390,7 +390,7 @@ func (tree SchemaTree) WriteTypeFreqs(file string) {
 
 	f.WriteString("URI;Frequency\n")
 	for uri, item := range tree.PropMap {
-		if item.isType() {
+		if item.IsType() {
 			f.WriteString(fmt.Sprintf("%v;%v\n", strings.TrimPrefix(uri, "t#"), item.TotalCount))
 		}
 	}
