@@ -36,6 +36,7 @@ func main() {
 	createConfigs := flag.Bool("createConfigs", false, "Create a bunch of config")
 	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
+	typedEntities := flag.Bool("typed", false, "Use type information or not")
 
 	logr := log.New(os.Stderr, "", 0)
 
@@ -96,7 +97,7 @@ func main() {
 			log.Fatalln("A model must be provided for Batch Test!")
 			return
 		}
-		err := batchConfigBenchmark(*trainedModel, *numberConfigs)
+		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities)
 		if err != nil {
 			log.Fatalln("Batch Config Failed", err)
 			return
@@ -131,7 +132,7 @@ func main() {
 			if err != nil {
 				log.Fatalln(err)
 			}
-			stats, _ = evaluation(tree, testFile, strategy.MakePresetWorkflow("direct", tree))
+			stats, _ = evaluation(tree, testFile, strategy.MakePresetWorkflow("direct", tree), typedEntities)
 
 			f, _ := os.Create(*testFile + ".eval")
 			e := gob.NewEncoder(f)
@@ -153,7 +154,7 @@ type evalResources struct {
 	memoryAllocation uint64
 }
 
-func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow) (stats map[uint16][]uint32, resources map[uint16][]*evalResources) {
+func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool) (stats map[uint16][]uint32, resources map[uint16][]*evalResources) {
 	resources = make(map[uint16][]*evalResources)
 	stats = make(map[uint16][]uint32)
 
@@ -244,14 +245,15 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		wg.Done()
 	}()
 
-	// TODO flag if anfrage
-	// ohne types
-	if false {
+	if !*typed {
+		// not typed
+		//fmt.Printf("No Types")
 		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
 		close(results)
 		wg.Wait()
 	} else {
 		// else mit types
+		//fmt.Printf("Types")
 		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTyped, 0, true)
 		close(results)
 		wg.Wait()

@@ -19,6 +19,7 @@
 # Include the original dataset (but remove it in the future)
 !10M.nt.gz
 
+config_*.json
 # Things built by the recommender should not be included in the repository
 10M.nt.gz.schemaTree.bin
 10M.nt.gz.schemaTree.typed.bin
