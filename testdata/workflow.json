@@ -1,0 +1,1 @@
+{"Testset":"../testdata/10M.nt_1in2_test.gz","Layers":[{"Condition":"tooFewRecommendations","Backoff":"deleteLowFrequency","Threshold":1,"ThresholdFloat":0,"Merger":"","Splitter":"","Stepsize":"stepsizeLinear","ParallelExecutions":5},{"Condition":"always","Backoff":"standard","Threshold":0,"ThresholdFloat":0,"Merger":"","Splitter":"","Stepsize":"","ParallelExecutions":0}]}
