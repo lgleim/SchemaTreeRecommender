@@ -4,6 +4,7 @@ package strategy
 
 import (
 	"recommender/assessment"
+	"recommender/backoff"
 	"recommender/schematree"
 )
 
@@ -77,16 +78,16 @@ func MakeAssessmentAwareDirectProcedure() Procedure {
 }
 
 // Helper method to create the 'deletelowfrequency' backoff procedure.
-func MakeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int, stepsize StepsizeFunc, condition InternalCondition) Procedure {
-	b := NewBackoffDeleteLowFrequencyItems(tree, parExecs, stepsize, condition)
+func MakeDeleteLowFrequencyProcedure(tree *schematree.SchemaTree, parExecs int, stepsize backoff.StepsizeFunc, condition backoff.InternalCondition) Procedure {
+	b := backoff.NewBackoffDeleteLowFrequencyItems(tree, parExecs, stepsize, condition)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
 	}
 }
 
 // Helper method to create the 'splitproperty' backoff procedure.
-func MakeSplitPropertyProcedure(tree *schematree.SchemaTree, splitter SplitterFunc, merger MergerFunc) Procedure {
-	b := NewBackoffSplitPropertySet(tree, splitter, merger)
+func MakeSplitPropertyProcedure(tree *schematree.SchemaTree, splitter backoff.SplitterFunc, merger backoff.MergerFunc) Procedure {
+	b := backoff.NewBackoffSplitPropertySet(tree, splitter, merger)
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return b.Recommend(asm.Props)
 	}
@@ -102,14 +103,14 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	case "deletelowfrequency":
 		wf.Push(
 			MakeAlwaysCondition(),
-			MakeDeleteLowFrequencyProcedure(tree, 4, StepsizeProportional, MakeMoreThanInternalCondition(10)),
+			MakeDeleteLowFrequencyProcedure(tree, 4, backoff.StepsizeProportional, backoff.MakeMoreThanInternalCondition(10)),
 			"always run deletelowfrequency with 4 parallel processes",
 		)
 
 	case "best":
 		wf.Push(
 			MakeTooFewRecommendationsCondition(1),
-			MakeDeleteLowFrequencyProcedure(tree, 4, StepsizeLinear, MakeMoreThanInternalCondition(4)),
+			MakeDeleteLowFrequencyProcedure(tree, 4, backoff.StepsizeLinear, backoff.MakeMoreThanInternalCondition(4)),
 			"run deletelowfrequency with 4 parallel processes",
 		)
 		wf.Push(
@@ -122,7 +123,7 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	case "splitproperty":
 		wf.Push(
 			MakeAboveThresholdCondition(2),
-			MakeSplitPropertyProcedure(tree, EverySecondItemSplitter, MaxMerger),
+			MakeSplitPropertyProcedure(tree, backoff.EverySecondItemSplitter, backoff.MaxMerger),
 			"with 3 or more properties run splitproperty",
 		)
 		wf.Push(
@@ -136,7 +137,7 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 	case "toofewrecommendations":
 		wf.Push(
 			MakeTooFewRecommendationsCondition(10),
-			MakeDeleteLowFrequencyProcedure(tree, 4, StepsizeProportional, MakeMoreThanInternalCondition(10)),
+			MakeDeleteLowFrequencyProcedure(tree, 4, backoff.StepsizeProportional, backoff.MakeMoreThanInternalCondition(10)),
 			"if less than 10 recommendations are generated, run the deletelowfrequency backoff",
 		)
 		wf.Push(

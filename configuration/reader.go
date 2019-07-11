@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"recommender/backoff"
 	"recommender/schematree"
 	"recommender/strategy"
 
@@ -67,9 +68,9 @@ func ConfigToWorkflow(config *Configuration, tree *schematree.SchemaTree) (wf *s
 		case "deleteLowFrequency":
 			switch l.Stepsize {
 			case "stepsizeLinear":
-				back = strategy.MakeDeleteLowFrequencyProcedure(tree, l.ParallelExecutions, strategy.StepsizeLinear, strategy.MakeMoreThanInternalCondition(l.Threshold))
+				back = strategy.MakeDeleteLowFrequencyProcedure(tree, l.ParallelExecutions, backoff.StepsizeLinear, backoff.MakeMoreThanInternalCondition(l.Threshold))
 			case "stepsizeProportional":
-				back = strategy.MakeDeleteLowFrequencyProcedure(tree, l.ParallelExecutions, strategy.StepsizeProportional, strategy.MakeMoreThanInternalCondition(l.Threshold))
+				back = strategy.MakeDeleteLowFrequencyProcedure(tree, l.ParallelExecutions, backoff.StepsizeProportional, backoff.MakeMoreThanInternalCondition(l.Threshold))
 			default:
 				err = errors.Errorf("Merger not found")
 				return
@@ -77,14 +78,14 @@ func ConfigToWorkflow(config *Configuration, tree *schematree.SchemaTree) (wf *s
 		case "standard":
 			back = strategy.MakeAssessmentAwareDirectProcedure()
 		case "splitProperty":
-			var merger strategy.MergerFunc
-			var splitter strategy.SplitterFunc
+			var merger backoff.MergerFunc
+			var splitter backoff.SplitterFunc
 			switch l.Merger {
 			case "max":
-				merger = strategy.MaxMerger
+				merger = backoff.MaxMerger
 
 			case "avg":
-				merger = strategy.AvgMerger
+				merger = backoff.AvgMerger
 			default:
 				err = errors.Errorf("Merger not found")
 				return
@@ -92,10 +93,10 @@ func ConfigToWorkflow(config *Configuration, tree *schematree.SchemaTree) (wf *s
 
 			switch l.Splitter {
 			case "everySecondItem":
-				splitter = strategy.EverySecondItemSplitter
+				splitter = backoff.EverySecondItemSplitter
 
 			case "twoSupportRanges":
-				splitter = strategy.TwoSupportRangesSplitter
+				splitter = backoff.TwoSupportRangesSplitter
 			default:
 				err = errors.Errorf("Splitter not found")
 				return
