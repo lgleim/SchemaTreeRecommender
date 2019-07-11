@@ -38,8 +38,8 @@ func runConfig(name *string, tree *schematree.SchemaTree, typed bool) (result ev
 	if err != nil {
 		return
 	}
-	stats, resources := evaluation(tree, &config.Testset, wf, &typed)
-	result = makeStatistics(stats, resources)[0]
+	stats, resources, hitRate := evaluation(tree, &config.Testset, wf, &typed)
+	result = makeStatistics(stats, resources, hitRate)[0]
 	return
 }
 
