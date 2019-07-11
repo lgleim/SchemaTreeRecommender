@@ -40,8 +40,6 @@ func main() {
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
 
-	logr := log.New(os.Stderr, "", 0)
-
 	// parse commandline arguments/flags
 	flag.Parse()
 
@@ -85,7 +83,7 @@ func main() {
 	}
 
 	stats := make(map[uint16][]uint32)
-
+	hits := make(map[uint16][]bool)
 	if *createConfigs {
 		if *createConfigsCreater == "" {
 			log.Fatalln("A Create Config File must be provided in ./configs!")
@@ -110,75 +108,61 @@ func main() {
 			log.Fatalln("A test set must be provided!")
 		}
 
-		f, err := os.Open(*testFile + ".eval")
-		if err == nil {
-			logr.Println("Loading evaluation results from previous run!")
-			decoder := gob.NewDecoder(f)
+		// evaluation
+		if *trainedModel == "" {
+			log.Fatalln("A model must be provided!")
+		}
+		tree, err := schematree.LoadSchemaTree(*trainedModel)
+		if err != nil {
+			log.Fatalln(err)
+		}
 
-			err = decoder.Decode(&stats)
-			if err != nil {
-				log.Fatalln("Failed to decode stats!", err)
-			}
-			// // to be deleted ...
-			// var summary []evalSummary
-			// err = decoder.Decode(&summary)
-			// fmt.Println(err, summary)
-			// // ... /
-
-		} else {
-			// evaluation
-			if *trainedModel == "" {
-				log.Fatalln("A model must be provided!")
-			}
-			tree, err := schematree.LoadSchemaTree(*trainedModel)
+		var wf *strategy.Workflow
+		if *configPath != "" {
+			//load workflow config if given
+			config, err := configuration.ReadConfigFile(configPath)
 			if err != nil {
 				log.Fatalln(err)
 			}
-
-			var wf *strategy.Workflow
-			if *configPath != "" {
-				//load workflow config if given
-				config, err := configuration.ReadConfigFile(configPath)
-				if err != nil {
-					log.Fatalln(err)
-				}
-				err = config.Test()
-				if err != nil {
-					log.Fatalln(err)
-				}
-				wf, err = configuration.ConfigToWorkflow(config, tree)
-				if err != nil {
-					log.Fatalln(err)
-				}
-			} else {
-				// if no workflow config given then run standard recommender
-				wf = strategy.MakePresetWorkflow("direct", tree)
+			err = config.Test()
+			if err != nil {
+				log.Fatalln(err)
 			}
-			stats, _ = evaluation(tree, testFile, wf, typedEntities)
-
-			f, _ := os.Create(*testFile + ".eval")
-			e := gob.NewEncoder(f)
-			// e.Encode(summary)
-			e.Encode(stats)
-			f.Close()
+			wf, err = configuration.ConfigToWorkflow(config, tree)
+			if err != nil {
+				log.Fatalln(err)
+			}
+		} else {
+			// if no workflow config given then run standard recommender
+			wf = strategy.MakePresetWorkflow("direct", tree)
 		}
-		writeStatisticsToFile(stats, *testFile)
+		stats, _, hits = evaluation(tree, testFile, wf, typedEntities)
+
+		f, _ := os.Create(*testFile + ".eval")
+		e := gob.NewEncoder(f)
+		// e.Encode(summary)
+		e.Encode(stats)
+		f.Close()
 	}
+	writeStatisticsToFile(stats, hits, *testFile)
+
 }
 
 type evalResult struct {
 	setSize   uint16
 	position  uint32
 	resources *evalResources
+	hit       bool
 }
 type evalResources struct {
 	duration         int64
 	memoryAllocation uint64
 }
 
-func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool) (stats map[uint16][]uint32, resources map[uint16][]*evalResources) {
+func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool) (stats map[uint16][]uint32, resources map[uint16][]*evalResources, hitRates map[uint16][]bool) {
 	resources = make(map[uint16][]*evalResources)
 	stats = make(map[uint16][]uint32)
+	hitRates = make(map[uint16][]bool)
 
 	// memoize empty set recommendations
 	setSup := float64(tree.Root.Support) // empty set occured in all transactions
@@ -209,14 +193,21 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			runtime.ReadMemStats(&m)
 			resource = evalResources{duration, m.Alloc / 1024 / 1024}
 		}
+
+		included := false
 		for i, r := range recs {
 			if r.Property == leftOut { // found item to recover
 				for i > 0 && recs[i-1].Probability == r.Probability {
 					i--
 				}
-				results <- evalResult{uint16(len(properties)), uint32(i), &resource}
+				results <- evalResult{uint16(len(properties)), uint32(i), &resource, true}
+				included = true
 				break
 			}
+		}
+		//punish if not in recommendation rec included
+		if !included {
+			results <- evalResult{uint16(len(properties)), 500, &resource, false}
 		}
 	}
 
@@ -263,6 +254,7 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		for res := range results {
 			stats[res.setSize] = append(stats[res.setSize], res.position)
 			resources[res.setSize] = append(resources[res.setSize], res.resources)
+			hitRates[res.setSize] = append(hitRates[res.setSize], res.hit)
 		}
 		wg.Done()
 	}()
@@ -281,31 +273,39 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		wg.Wait()
 	}
 
-	var lenght uint32
+	var length uint64
 	for _, rank_list := range stats {
-		lenght += uint32(len(rank_list))
+		length += uint64(len(rank_list))
 	}
-	total := make([]uint32, 0, lenght)
-	total_res := make([]*evalResources, 0, lenght)
+
+	total := make([]uint32, 0, length)
+	total_res := make([]*evalResources, 0, length)
+	total_hits := make([]bool, 0, length)
+
+	for _, rank_list := range resources {
+		total_res = append(total_res, rank_list...)
+	}
 
 	for _, rank_list := range stats {
 		total = append(total, rank_list...)
 	}
-	for _, rank_list := range resources {
-		total_res = append(total_res, rank_list...)
+
+	for _, rank_list := range hitRates {
+		total_hits = append(total_hits, rank_list...)
 	}
+
 	stats[0] = total
 	resources[0] = total_res
+	hitRates[0] = total_hits
 
-	return stats, resources
+	return stats, resources, hitRates
 }
 
-func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResources) (statistics []evalSummary) {
+func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResources, hitRates map[uint16][]bool) (statistics []evalSummary) {
 	// compute statistics
 	duration := make(map[uint16]float64)
 	memoryAllocation := make(map[uint16]float64)
 	var averageSize float64
-
 	for k, v := range resources {
 		for _, res := range v {
 			duration[k] = duration[k] + float64(res.duration)
@@ -330,14 +330,17 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 
 	sort.Ints(setLens)
 	for i, setLen := range setLens {
+
 		v := stats[uint16(setLen)]
+		h := hitRates[uint16(setLen)]
+
 		if len(v) == 0 {
 			continue
 		}
 		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
 
 		var sum uint64
-		var mean, meanSquare, median, variance, top1, top5, top10, subjects, worst5average float64
+		var mean, meanSquare, median, variance, top1, top5, top10, subjects, worst5average, hitRate float64
 		l := float64(len(v))
 
 		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / float64(len(v))
@@ -349,6 +352,8 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 			median = mean
 			variance = 0
 			worst5average = mean
+			hitRate = 0
+
 		} else {
 			if len(v)%2 != 0 {
 				median = float64(v[len(v)/2])
@@ -373,6 +378,15 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 				sum += uint64(value)
 			}
 			worst5average = float64(sum) / float64(len(worst5))
+
+			sum = 0
+			for _, x := range h {
+				if x {
+					sum++
+				}
+			}
+			hitRate = float64(sum) / float64(len(h))
+
 		}
 
 		if setLen == 0 {
@@ -380,7 +394,7 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 		} else {
 			subjects = float64(len(v)) / float64(setLen)
 		}
-		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), subjects, worst5average + 1, duration[uint16(setLen)], memoryAllocation[uint16(setLen)]}
+		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), subjects, worst5average + 1, duration[uint16(setLen)], memoryAllocation[uint16(setLen)], hitRate}
 	}
 	return
 }
@@ -398,11 +412,12 @@ type evalSummary struct {
 	worst5average    float64
 	duration         float64
 	memoryAllocation float64
+	hitRate          float64
 }
 
-func writeStatisticsToFile(stats map[uint16][]uint32, fileName string) (output string) {
+func writeStatisticsToFile(stats map[uint16][]uint32, hitRates map[uint16][]bool, fileName string) (output string) {
 	// compute statistics
-	output = fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects")
+	output = fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v, %8v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "HitRate")
 	setLens := make([]int, 0, len(stats))
 	for setLen := range stats {
 		setLens = append(setLens, int(setLen))
@@ -410,13 +425,14 @@ func writeStatisticsToFile(stats map[uint16][]uint32, fileName string) (output s
 	sort.Ints(setLens)
 	for _, setLen := range setLens {
 		v := stats[uint16(setLen)]
+		h := hitRates[uint16(setLen)]
 		if len(v) == 0 {
 			continue
 		}
 		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
 
 		var sum uint64
-		var mean, meanSquare, median, variance, top1, top5, top10 float64
+		var mean, meanSquare, median, variance, top1, top5, top10, hitRate float64
 		l := float64(len(v))
 
 		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / float64(len(v))
@@ -427,6 +443,7 @@ func writeStatisticsToFile(stats map[uint16][]uint32, fileName string) (output s
 			mean = float64(v[0])
 			median = mean
 			variance = 0
+			hitRate = 0
 		} else {
 			if len(v)%2 != 0 {
 				median = float64(v[len(v)/2])
@@ -439,10 +456,19 @@ func writeStatisticsToFile(stats map[uint16][]uint32, fileName string) (output s
 				meanSquare += float64(x) * float64(x) / l
 			}
 			mean = float64(sum) / l
-			variance = meanSquare - (mean * mean)
+			variance = math.Abs(meanSquare - (mean * mean))
+
+			sum = 0
+			for _, x := range h {
+				if x {
+					sum++
+				}
+			}
+			hitRate = float64(sum) / float64(len(h))
+
 		}
 
-		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v\n", setLen, median+1, mean+1, math.Sqrt(variance), top1*100, top5*100, top10*100, len(v), len(v)/(setLen+1))
+		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v, %8.8f\n", setLen, median+1, mean+1, math.Sqrt(variance), top1*100, top5*100, top10*100, len(v), len(v)/(setLen+1), hitRate*100.0)
 	}
 	f, _ := os.Create(fileName + ".csv")
 	f.WriteString(output)
