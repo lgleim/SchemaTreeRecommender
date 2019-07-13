@@ -154,6 +154,8 @@ func InterpreteIriRef(token []byte) (text []byte) {
 
 // Retrieves a token from a N-Triple entry.
 // TODO: Test multiple escaping cases
+// TODO: This could be improved by allowing an argument to specify the max number of tokens to parse.
+//       If only the subject is needed than parsing the predicate and object becomes unnecessary.
 func retrieveToken(data []byte) (advance int, token []byte) {
 	var sigil rune        // current rune that is being checked
 	var width int         // width of sigil

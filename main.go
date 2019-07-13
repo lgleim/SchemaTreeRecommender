@@ -319,7 +319,7 @@ func main() {
 		Long: "Split a N-Triple <dataset> file into three files according to the type of wikidata" +
 			" entry: item, prop and misc. The split files are generated in the same directory" +
 			" as the <dataset>, stripped of their compression extension and given the following" +
-			" names: <extless-dataset>.item.gz, <extless-dataset>.prop.gz, <extless-dataset>.misc.gz",
+			" names: <dataset>.item.gz, <dataset>.prop.gz, <dataset>.misc.gz",
 		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -334,6 +334,35 @@ func main() {
 			// Prepare and output the stats for it
 			totalCount := float64(sStats.ItemCount + sStats.PropCount + sStats.MiscCount)
 			fmt.Println("Split dataset by type:")
+			fmt.Printf("  item: %d (%f)\n", sStats.ItemCount, float64(sStats.ItemCount)/totalCount)
+			fmt.Printf("  prop: %d (%f)\n", sStats.PropCount, float64(sStats.PropCount)/totalCount)
+			fmt.Printf("  misc: %d (%f)\n", sStats.MiscCount, float64(sStats.MiscCount)/totalCount)
+
+		},
+	}
+
+	// subsubcommand split-dataset by-type
+	cmdSplitDatasetByPrefix := &cobra.Command{
+		Use:   "by-prefix <dataset>",
+		Short: "Split a dataset according to the prefix of the subject",
+		Long: "Split a N-Triple <dataset> file into three files according to the preset of the subject" +
+			" into: item, prop and misc. The split files are generated in the same directory" +
+			" as the <dataset>, stripped of their compression extension and given the following" +
+			" names: <dataset>.item.gz, <dataset>.prop.gz, <dataset>.misc.gz",
+		Args: cobra.ExactArgs(1),
+
+		Run: func(cmd *cobra.Command, args []string) {
+			inputDataset := &args[0]
+
+			// Make the split
+			sStats, err := preparation.SplitByPrefix(*inputDataset)
+			if err != nil {
+				log.Panicln(err)
+			}
+
+			// Prepare and output the stats for it
+			totalCount := float64(sStats.ItemCount + sStats.PropCount + sStats.MiscCount)
+			fmt.Println("Split dataset by prefix:")
 			fmt.Printf("  item: %d (%f)\n", sStats.ItemCount, float64(sStats.ItemCount)/totalCount)
 			fmt.Printf("  prop: %d (%f)\n", sStats.PropCount, float64(sStats.PropCount)/totalCount)
 			fmt.Printf("  misc: %d (%f)\n", sStats.MiscCount, float64(sStats.MiscCount)/totalCount)
@@ -435,6 +464,7 @@ func main() {
 	// putting the command hierarchy together
 	cmdRoot.AddCommand(cmdSplitDataset)
 	cmdSplitDataset.AddCommand(cmdSplitDatasetByType)
+	cmdSplitDataset.AddCommand(cmdSplitDatasetByPrefix)
 	cmdSplitDataset.AddCommand(cmdSplitDatasetBySampling)
 	cmdRoot.AddCommand(cmdFilterDataset)
 	cmdFilterDataset.AddCommand(cmdFilterDatasetForSchematree)

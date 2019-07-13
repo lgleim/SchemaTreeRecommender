@@ -33,7 +33,7 @@ Individual descriptions in subfolders.
 ./recommender build-glossary ./testdata/handcrafted.nt.prop.gz.filtered.gz
 
 # Start the server 
-# (TODO: shorten the big file names)
+# (TODO: shorten the big file names - should edit the names before the extension: data.nt.gz to data-item.nt.gz)
 # (TODO: add information about workflow strategies)
 ./recommender serve ./testdata/handcrafted.nt.item.gz.filtered.gz.schemaTree.bin ./testdata/handcrafted.nt.prop.gz.filtered.gz.glossary.bin
 
