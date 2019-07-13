@@ -39,9 +39,25 @@ func NewTripleParser(filePath string) (*TripleParser, error) {
 
 // NextTriple returns the next triple that is read from the internal file.
 //
+// Arguments:
+//   numTokens int : by adding the optional argument you can decide how many tokens
+//                   should be parsed. With 0, no tokens are parsed. With 1, 2 or 3
+//                   all tokens up to including Subject, Predicate and Object are
+//                   parsed. Non-parsed tokens are nil slices.
+//
+// Example:
+//    triple, err := tripleParser.NextTriple(2)  // consume line and parse subject and predicate.
+//
 // TODO: The parsing is a subset of the actual N-Triple syntax.
-// TODO: Integrate with the loading bar.
-func (tp *TripleParser) NextTriple() (*Triple, error) {
+func (tp *TripleParser) NextTriple(argNumTokens ...int) (*Triple, error) {
+
+	// parse the optional arguments
+	var numTokens int
+	if len(argNumTokens) > 0 {
+		numTokens = argNumTokens[0]
+	} else {
+		numTokens = 3 // per default, all tokens are parsed
+	}
 
 	// read one line from the file
 	origLine, isPrefix, err := tp.scanner.ReadLine()
@@ -59,6 +75,11 @@ func (tp *TripleParser) NextTriple() (*Triple, error) {
 		return tp.NextTriple()
 	}
 
+	// early termination if no tokens are to be parsed.
+	if numTokens == 0 {
+		return &Triple{nil, nil, nil, origLine}, nil
+	}
+
 	// process subject
 	subjectBytes, subjectToken := retrieveToken(origLine)
 	line := origLine[subjectBytes:]
@@ -68,9 +89,19 @@ func (tp *TripleParser) NextTriple() (*Triple, error) {
 		return tp.NextTriple()
 	}
 
+	// early termination if only one token should be parsed
+	if numTokens == 1 {
+		return &Triple{subjectToken, nil, nil, origLine}, nil
+	}
+
 	// process predicate
 	predicateBytes, predicateToken := retrieveToken(line)
 	line = line[predicateBytes:]
+
+	// early termination if only two tokens should be parsed
+	if numTokens == 2 {
+		return &Triple{subjectToken, predicateToken, nil, origLine}, nil
+	}
 
 	// process object
 	// TODO: Check if strings with spaces work, like:  "New York"@gb

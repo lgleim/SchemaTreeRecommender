@@ -53,7 +53,7 @@ func SplitByPrefix(filePath string) (*SplitByPrefixStats, error) {
 	defer miscFile.Close()
 
 	// Go through all entries and decide on a line-by-line basis.
-	for trip, err := tParser.NextTriple(); trip != nil && err == nil; trip, err = tParser.NextTriple() {
+	for trip, err := tParser.NextTriple(1); trip != nil && err == nil; trip, err = tParser.NextTriple(1) {
 
 		// We can check for equality in the first bytes instead of using actual regex or unicode.
 		if startsWithOneOf(trip.Subject, wdItemSubjects) {
