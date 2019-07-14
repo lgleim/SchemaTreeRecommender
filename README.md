@@ -17,25 +17,25 @@ Individual descriptions in subfolders.
 
 # Download a dataset, for example the latest 32GB dataset from wikidata
 # curl https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz --output latest-truthy.nt.gz
-# (this example will assume that a dataset called `./data/10M.nt.gz` exists)
+# (this example will assume that a dataset called `./testdata/handcrafted.nt` exists)
 
 # Split the dataset for wikidata items and properties
 # (TODO: The handcrafted dataset has to be improved  with a better combination of entries)
-./recommender split-dataset by-type ./testdata/handcrafted.nt
+./recommender split-dataset by-prefix ./testdata/handcrafted.nt
 
-# Prepare the dataset and build the Schema Tree
-# (TODO: add commands for Typed Schema Trees)
-./recommender filter-dataset for-schematree ./testdata/handcrafted.nt.item.gz 
-./recommender build-tree ./testdata/handcrafted.nt.item.gz.filtered.gz
+# Prepare the dataset and build the Schema Tree (typed variant) (the sort is only required for future 1-in-n splits)
+./recommender filter-dataset for-schematree ./testdata/handcrafted-item.nt.gz 
+gzip -cd ./testdata/handcrafted-item-filtered.nt.gz | sort | gzip > ./testdata/handcrafted-item-filtered-sorted.nt.gz
+./recommender build-tree-typed ./testdata/handcrafted-item-filtered-sorted.nt.gz
 
 # Prepare the dataset and build the Glossary
-./recommender filter-dataset for-glossary ./testdata/handcrafted.nt.prop.gz
-./recommender build-glossary ./testdata/handcrafted.nt.prop.gz.filtered.gz
+./recommender filter-dataset for-glossary ./testdata/handcrafted-prop.nt.gz
+gzip -cd ./testdata/handcrafted-prop-filtered.nt.gz | sed -r -e 's|^<http:\/\/www\.wikidata\.org\/entity\/P([^>]+)>|<http://www.wikidata.org/prop/direct/P\1>|g' | gzip > ./testdata/handcrafted-prop-filtered-altered.nt.gz
+./recommender build-glossary ./testdata/handcrafted-prop-filtered-altered.nt.gz
 
 # Start the server 
-# (TODO: shorten the big file names - should edit the names before the extension: data.nt.gz to data-item.nt.gz)
 # (TODO: add information about workflow strategies)
-./recommender serve ./testdata/handcrafted.nt.item.gz.filtered.gz.schemaTree.bin ./testdata/handcrafted.nt.prop.gz.filtered.gz.glossary.bin
+./recommender serve ./testdata/handcrafted-item-filtered-sorted.schemaTree.typed.bin ./testdata/handcrafted-prop-filtered-altered.glossary.bin
 
 # Test with a request 
 curl -d '{"lang":"en","properties":["local://prop/Color"],"types":[]}' http://localhost:8080/recommender

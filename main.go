@@ -122,7 +122,7 @@ func main() {
 		Use:   "build-tree <dataset>",
 		Short: "Build the SchemaTree model",
 		Long: "A SchemaTree model will be built using the file provided in <dataset>." +
-			" The dataset should be a N-Triple of Items. Two output files will be" +
+			" The dataset should be a N-Triple of Items.\nTwo output files will be" +
 			" generated in the same directory as <dataset> and with suffixed names, namely:" +
 			" '<dataset>.firstPass.bin' and '<dataset>.schemaTree.bin'",
 		Args: cobra.ExactArgs(1),
@@ -154,9 +154,9 @@ func main() {
 		Use:   "build-tree-typed <dataset>",
 		Short: "Build the SchemaTree model with types",
 		Long: "A SchemaTree model will be built using the file provided in <dataset>." +
-			" The dataset should be a N-Triple of Items. Two output files will be" +
+			" The dataset should be a N-Triple of Items.\nTwo output files will be" +
 			" generated in the same directory as <dataset> and with suffixed names, namely:" +
-			" '<dataset>.firstPass.bin' and '<dataset>.schemaTree.bin'",
+			" '<dataset>.firstPass.bin' and '<dataset>.schemaTree.typed.bin'",
 		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -190,7 +190,7 @@ func main() {
 		Use:   "build-glossary <dataset>",
 		Short: "Build the Glossary that maps properties to multi-lingual descriptions",
 		Long: "A Glossary will be built using the file provided in <dataset>. The input" +
-			" file should be a N-Triple of Property entries. The output file will be" +
+			" file should be a N-Triple of Property entries.\nThe output file will be" +
 			" generated in the same directory as <dataset> with the name:" +
 			" '<dataset>.glossary.bin'",
 		Args: cobra.ExactArgs(1),
@@ -216,7 +216,7 @@ func main() {
 		Use:   "serve <model> <glossary>",
 		Short: "Serve a SchemaTree model via an HTTP Server",
 		Long: "Load the <model> (schematree binary) and the <glossary> (glossary binary) and the recommendation" +
-			" endpoint using an HTTP Server. Available endpoints are given on startup.",
+			" endpoint using an HTTP Server.\nAvailable endpoints are stated in the server README.",
 		Args: cobra.ExactArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			modelBinary := &args[0]
@@ -318,9 +318,9 @@ func main() {
 		Use:   "by-type <dataset>",
 		Short: "Split a dataset according to the type of wikidata entry",
 		Long: "Split a N-Triple <dataset> file into three files according to the type of wikidata" +
-			" entry: item, prop and misc. The split files are generated in the same directory" +
+			" entry: item, prop and misc.\nThe split files are generated in the same directory" +
 			" as the <dataset>, stripped of their compression extension and given the following" +
-			" names: <dataset>.item.gz, <dataset>.prop.gz, <dataset>.misc.gz\n" +
+			" names: <base>-item.nt.gz, <base>-prop.nt.gz, <base>-misc.nt.gz\n" +
 			"This method assumes that all entries for a given subject are defined in contiguous lines.",
 		Args: cobra.ExactArgs(1),
 
@@ -348,9 +348,9 @@ func main() {
 		Use:   "by-prefix <dataset>",
 		Short: "Split a dataset according to the prefix of the subject",
 		Long: "Split a N-Triple <dataset> file into three files according to the preset of the subject" +
-			" into: item, prop and misc. The split files are generated in the same directory" +
+			" into: item, prop and misc.\nThe split files are generated in the same directory" +
 			" as the <dataset>, stripped of their compression extension and given the following" +
-			" names: <dataset>.item.gz, <dataset>.prop.gz, <dataset>.misc.gz",
+			" names: <base>-item.nt.gz, <base>-prop.nt.gz, <dataset>-misc.nt.gz",
 		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -378,7 +378,9 @@ func main() {
 		Use:   "1-in-n <dataset>",
 		Short: "Split a dataset using systematic sampling",
 		Long: "Split a N-Triple <dataset> file into two files where every Nth subject goes into" +
-			" one file and the rest into the second file.\n" +
+			" one file and the rest into the second file.\nThe split files are generated in the same directory" +
+			" as the <dataset>, stripped of their compression extension and given the following" +
+			" names: <base>-1in<n>-test.nt.gz, <base>-1in<n>-train.nt.gz\n" +
 			"This method assumes that all entries for a given subject are defined in contiguous lines.",
 		Args: cobra.ExactArgs(1),
 
@@ -401,8 +403,10 @@ func main() {
 	cmdFilterDatasetForSchematree := &cobra.Command{
 		Use:   "for-schematree <dataset>",
 		Short: "Prepare the dataset for inclusion in the SchemaTree",
-		Long:  "Remove entries that should not be considered by the SchemaTree",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove entries that should not be considered by the SchemaTree builder.\nThe new file is" +
+			" generated in the same directory as the <dataset>, stripped of their compression extension" +
+			" and given the following name: <base>-filtered.nt.gz",
+		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
 			inputDataset := &args[0]
@@ -426,8 +430,10 @@ func main() {
 	cmdFilterDatasetForGlossary := &cobra.Command{
 		Use:   "for-glossary <dataset>",
 		Short: "Prepare the dataset for inclusion in the Glossary",
-		Long:  "Remove entries that should not be considered by the Glossary",
-		Args:  cobra.ExactArgs(1),
+		Long: "Remove entries that should not be considered by the Glossary builder.\nThe new file is" +
+			" generated in the same directory as the <dataset>, stripped of their compression extension" +
+			" and given the following name: <base>-filtered.nt.gz",
+		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
 			inputDataset := &args[0]
@@ -452,7 +458,8 @@ func main() {
 		Use:   "for-evaluation <dataset>",
 		Short: "Prepare the dataset for usage in the evaluation",
 		Long: "Remove entries that would not affect the evaluation results but which would make" +
-			" the evaluation slower. Usually the case with multiple labels.",
+			" the evaluation slower. Usually the case with multiple labels.\nCurrently this does" +
+			" exactly the same as the 'for-schematree' filter.",
 		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {

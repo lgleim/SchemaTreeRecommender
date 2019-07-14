@@ -37,5 +37,32 @@ In previous datasets (`10M.nt.gz` from June 2019), the items were defined with `
 
 Another simpler, but not so pedantic way, would be to check if the subject start with a prefix. This is hypothetical and not actually used.
 
-* For entities: <http://www.wikidata.org/entity/Q   >
-* For properties: <http://www.wikidata.org/entity/P   >
+* For entities: `<http://www.wikidata.org/entity/Q`
+* For properties: `<http://www.wikidata.org/entity/P`
+
+
+## Prefix mismatch on properties
+
+Wikidata uses (at least) two different URL prefixes to refer to the properties, and this creates an incompatibility on the glossary which needs to be fixed with an extra preparation step on the property dataset.
+
+When an Item subject refers to a Property predicate, Wikidata will use `<http://www.wikidata.org/prop/direct/Pxxx>` to refer to the property, but when Wikidata is defining the Property (in other words, when Property is used as a subject), Wikidata will refer to it with `<http://www.wikidata.org/entity/Pxxx>`. Notice the mismatch between `/prop/direct/` and `/entity/`.
+
+Without a proper preparation step, this mismatch will cause the glossary to store all labels using the `/entity/` key, while the server requests will actually try to fetch `/prop/direct/` keys from the glossary, resulting in showing no labels at all.
+
+These two different url prefixes are described in the data by using a specific predicate. An example is:
+
+    <http://www.wikidata.org/entity/Pxxx> <http://wikiba.se/ontology#directClaim> <http://www.wikidata.org/prop/direct/Pxxx> .
+
+The current extra preparation step makes a simple prefix change, but assumes a specific URL is used. It is not pedantic.
+
+```bash
+gzip -cd dataset.nt.gz | sed -r -e 's|^<http:\/\/www\.wikidata\.org\/entity\/P([^>]+)>|<http://www.wikidata.org/prop/direct/P\1>|g' | gzip > ./dataset-altered.nt.gz
+```
+
+## Requirement of contiguous subject entries
+
+Some splitters that work in block of entries require that all subjects have their definitions in contiguous lines. To guarantee this requirement you can add an extra preparation step to sort the dataset.
+
+```bash
+gzip -cd ./dataset-filtered.nt.gz | sort | gzip > dataset-filtered-sorted.nt.gz
+```
