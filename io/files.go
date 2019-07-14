@@ -126,12 +126,23 @@ func CreateAndOpenWithGzip(filePath string) io.WriteCloser {
 	return GZipWriteCloser{gzipHandle: gzipw, fileHandle: fileh}
 }
 
-// TrimCompressionExtension will remove the extension of a fileName if it resembles
-// an extension used by compression algorithms.
-func TrimCompressionExtension(fileName string) (fileBase string) {
-	ext := filepath.Ext(fileName)
+// TrimExtensions will remove the extension of a fileName if it resembles an extension used by compression
+// algorithms (.gz, .bz2, .gbz). Then it will remove the Data format extension (.nt) if it follows next.
+func TrimExtensions(fileName string) (fileBase string) {
+	var base, ext string
+	base = fileName
+
+	// Try to remove a compression extension.
+	ext = filepath.Ext(base)
 	if ext == ".bz2" || ext == ".gz" || ext == ".gbz" {
-		return strings.TrimSuffix(fileName, ext)
+		base = strings.TrimSuffix(base, ext)
 	}
-	return fileName
+
+	// Try to remove a data format extension.
+	ext = filepath.Ext(base)
+	if ext == ".nt" {
+		base = strings.TrimSuffix(base, ext)
+	}
+
+	return base
 }

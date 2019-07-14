@@ -320,7 +320,8 @@ func main() {
 		Long: "Split a N-Triple <dataset> file into three files according to the type of wikidata" +
 			" entry: item, prop and misc. The split files are generated in the same directory" +
 			" as the <dataset>, stripped of their compression extension and given the following" +
-			" names: <dataset>.item.gz, <dataset>.prop.gz, <dataset>.misc.gz",
+			" names: <dataset>.item.gz, <dataset>.prop.gz, <dataset>.misc.gz\n" +
+			"This method assumes that all entries for a given subject are defined in contiguous lines.",
 		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -377,7 +378,8 @@ func main() {
 		Use:   "1-in-n <dataset>",
 		Short: "Split a dataset using systematic sampling",
 		Long: "Split a N-Triple <dataset> file into two files where every Nth subject goes into" +
-			" one file and the rest into the second file.",
+			" one file and the rest into the second file.\n" +
+			"This method assumes that all entries for a given subject are defined in contiguous lines.",
 		Args: cobra.ExactArgs(1),
 
 		Run: func(cmd *cobra.Command, args []string) {
@@ -406,13 +408,16 @@ func main() {
 			inputDataset := &args[0]
 
 			// Execute the filter
-			err := preparation.FilterForSchematree(*inputDataset)
+			sStats, err := preparation.FilterForSchematree(*inputDataset)
 			if err != nil {
 				log.Panicln(err)
 			}
 
 			// Prepare and output the stats for it
-			// TODO: stats
+			totalCount := float64(sStats.KeptCount + sStats.LostCount)
+			fmt.Println("Filter dataset for schematree:")
+			fmt.Printf("  kept: %d (%f)\n", sStats.KeptCount, float64(sStats.KeptCount)/totalCount)
+			fmt.Printf("  lost: %d (%f)\n", sStats.LostCount, float64(sStats.LostCount)/totalCount)
 
 		},
 	}
@@ -428,13 +433,16 @@ func main() {
 			inputDataset := &args[0]
 
 			// Execute the filter
-			err := preparation.FilterForGlossary(*inputDataset)
+			sStats, err := preparation.FilterForGlossary(*inputDataset)
 			if err != nil {
 				log.Panicln(err)
 			}
 
 			// Prepare and output the stats for it
-			// TODO: stats
+			totalCount := float64(sStats.KeptCount + sStats.LostCount)
+			fmt.Println("Filter dataset for glossary:")
+			fmt.Printf("  kept: %d (%f)\n", sStats.KeptCount, float64(sStats.KeptCount)/totalCount)
+			fmt.Printf("  lost: %d (%f)\n", sStats.LostCount, float64(sStats.LostCount)/totalCount)
 
 		},
 	}
@@ -451,13 +459,16 @@ func main() {
 			inputDataset := &args[0]
 
 			// Execute the filter
-			err := preparation.FilterForEvaluation(*inputDataset)
+			sStats, err := preparation.FilterForEvaluation(*inputDataset)
 			if err != nil {
 				log.Panicln(err)
 			}
 
 			// Prepare and output the stats for it
-			// TODO: stats
+			totalCount := float64(sStats.KeptCount + sStats.LostCount)
+			fmt.Println("Filter dataset for evaluation:")
+			fmt.Printf("  kept: %d (%f)\n", sStats.KeptCount, float64(sStats.KeptCount)/totalCount)
+			fmt.Printf("  lost: %d (%f)\n", sStats.LostCount, float64(sStats.LostCount)/totalCount)
 
 		},
 	}
