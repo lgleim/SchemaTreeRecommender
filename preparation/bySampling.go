@@ -6,7 +6,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -18,6 +17,8 @@ import (
 
 // SplitBySampling splits a dataset file into two by taking out every Nth entry.
 // Taken from the original splitter without modifications.
+//
+// Note that this method assumes that all subjects are defined in contiguous lines.
 func SplitBySampling(fileName string, oneInN int64) error {
 
 	// Set up file reader
@@ -30,8 +31,8 @@ func SplitBySampling(fileName string, oneInN int64) error {
 	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
 
 	// Set up training set writer
-	fName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
-	trainingSet, err := os.Create(fName + "_1in" + strconv.FormatInt(oneInN, 10) + "_train.gz")
+	fName := recIO.TrimExtensions(fileName)
+	trainingSet, err := os.Create(fName + "-1in" + strconv.FormatInt(oneInN, 10) + "-train.nt.gz")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func SplitBySampling(fileName string, oneInN int64) error {
 	defer wTrain.Close()
 
 	// Set up test set writer
-	testSet, err := os.Create(fName + "_1in" + strconv.FormatInt(oneInN, 10) + "_test.gz")
+	testSet, err := os.Create(fName + "-1in" + strconv.FormatInt(oneInN, 10) + "-test.nt.gz")
 	if err != nil {
 		log.Fatal(err)
 	}

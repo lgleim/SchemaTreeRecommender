@@ -46,15 +46,15 @@ func SplitByType(filePath string) (*SplitByTypeStats, error) {
 		itemBlock = iota
 		propBlock = iota
 	)
-	fileBase := filePath // recIO.TrimCompressionExtension(filePath)
+	fileBase := recIO.TrimExtensions(filePath)
 
-	itemFile := recIO.CreateAndOpenWithGzip(fileBase + ".item.gz")
+	itemFile := recIO.CreateAndOpenWithGzip(fileBase + "-type-item.nt.gz")
 	defer itemFile.Close()
 
-	propFile := recIO.CreateAndOpenWithGzip(fileBase + ".prop.gz")
+	propFile := recIO.CreateAndOpenWithGzip(fileBase + "-type-prop.nt.gz")
 	defer propFile.Close()
 
-	miscFile := recIO.CreateAndOpenWithGzip(fileBase + ".misc.gz")
+	miscFile := recIO.CreateAndOpenWithGzip(fileBase + "-type-misc.nt.gz")
 	defer miscFile.Close()
 
 	// Go through all entries in blocks of subjects. All the entries are stored in a buffer and when a

@@ -41,15 +41,15 @@ func SplitByPrefix(filePath string) (*SplitByPrefixStats, error) {
 		itemBlock = iota
 		propBlock = iota
 	)
-	fileBase := filePath // recIO.TrimCompressionExtension(filePath)
+	fileBase := recIO.TrimExtensions(filePath)
 
-	itemFile := recIO.CreateAndOpenWithGzip(fileBase + ".item.gz")
+	itemFile := recIO.CreateAndOpenWithGzip(fileBase + "-prefix-item.nt.gz")
 	defer itemFile.Close()
 
-	propFile := recIO.CreateAndOpenWithGzip(fileBase + ".prop.gz")
+	propFile := recIO.CreateAndOpenWithGzip(fileBase + "-prefix-prop.nt.gz")
 	defer propFile.Close()
 
-	miscFile := recIO.CreateAndOpenWithGzip(fileBase + ".misc.gz")
+	miscFile := recIO.CreateAndOpenWithGzip(fileBase + "-prefix-misc.nt.gz")
 	defer miscFile.Close()
 
 	// Go through all entries and decide on a line-by-line basis.

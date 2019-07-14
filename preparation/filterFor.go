@@ -9,7 +9,7 @@ import (
 // FilterForSchematree creates a filtered version of a dataset to make it better for
 // usage when building schematrees.
 // TODO: In future, such hard-coded predicates should probably not exist.
-func FilterForSchematree(filePath string) error {
+func FilterForSchematree(filePath string) (*FilterStats, error) {
 	var removalPredicates = [][]byte{
 		[]byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"),
 		[]byte("<http://www.w3.org/2000/01/rdf-schema#label>"),
@@ -23,7 +23,7 @@ func FilterForSchematree(filePath string) error {
 
 // FilterForGlossary creates a filtered version of a dataset to make it better for
 // usage when building glossaries.
-func FilterForGlossary(filePath string) error {
+func FilterForGlossary(filePath string) (*FilterStats, error) {
 	var removalPredicates = [][]byte{
 		[]byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"),
 		[]byte("<http://www.w3.org/2000/01/rdf-schema#label>"),
@@ -34,7 +34,7 @@ func FilterForGlossary(filePath string) error {
 
 // FilterForEvaluation creates a filtered version of a dataset to make it faster when
 // executing the evaluation.
-func FilterForEvaluation(filePath string) error {
+func FilterForEvaluation(filePath string) (*FilterStats, error) {
 	var removalPredicates = [][]byte{
 		[]byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"),
 		[]byte("<http://www.w3.org/2000/01/rdf-schema#label>"),
@@ -46,20 +46,28 @@ func FilterForEvaluation(filePath string) error {
 	return filterByPredicate(filePath, removalPredicates)
 }
 
+// FilterStats are the stats related to the filter operation.
+// TODO: Maybe these types of Stats returns should also tell use where the files have been stored.
+type FilterStats struct {
+	KeptCount int
+	LostCount int
+}
+
 // FilterByPredicate will create a filtered file by removing all entries that contain a predicate
 // listed in the removelPredicates argument.
-func filterByPredicate(filePath string, removalPredicates [][]byte) error {
+func filterByPredicate(filePath string, removalPredicates [][]byte) (*FilterStats, error) {
+	stats := FilterStats{}
 
 	// Get a N-Triple parser for the input file.
 	tParser, err := recIO.NewTripleParser(filePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer tParser.Close()
 
 	// Open file.
-	fileBase := filePath // recIO.TrimCompressionExtension(filePath)
-	filteredFile := recIO.CreateAndOpenWithGzip(fileBase + ".filtered.gz")
+	fileBase := recIO.TrimExtensions(filePath)
+	filteredFile := recIO.CreateAndOpenWithGzip(fileBase + "-filtered.nt.gz")
 	defer filteredFile.Close()
 
 	// Go through all entries in blocks of subjects.
@@ -70,6 +78,7 @@ func filterByPredicate(filePath string, removalPredicates [][]byte) error {
 		for _, pred := range removalPredicates {
 			if bytes.Equal(pred, trip.Predicate) {
 				toRemove = true
+				stats.LostCount++
 				break
 			}
 		}
@@ -78,11 +87,12 @@ func filterByPredicate(filePath string, removalPredicates [][]byte) error {
 		if toRemove == false {
 			filteredFile.Write(trip.Line)
 			filteredFile.Write([]byte("\r\n")) // have to write the newline
+			stats.KeptCount++
 		}
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &stats, nil
 }
