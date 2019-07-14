@@ -21,12 +21,20 @@ type Content struct {
 	Description string
 }
 
+type GlossaryStats struct {
+	TotalPropertyCount    uint64
+	TotalLabelCount       uint64
+	TotalDescriptionCount uint64
+	PropertiesPerLanguage map[string]uint64
+}
+
 // Glossary holds an entire glossary.
 type Glossary map[Key]*Content // glossary[property,language]
 
 // BuildGlossary from a dataset of N-Triples
 // todo: Should this method receive the filepath, a filehandler, or a tripleparser?
-func BuildGlossary(filePath string) (*Glossary, error) {
+func BuildGlossary(filePath string) (*Glossary, GlossaryStats, error) {
+	stats := GlossaryStats{0, 0, 0, make(map[string]uint64)}
 
 	// Setup property types of the wikidata ontology
 	var wdLabelPredicate = []byte("<http://schema.org/name>")
@@ -35,7 +43,7 @@ func BuildGlossary(filePath string) (*Glossary, error) {
 	// Get a N-Triple parser for the input file.
 	tParser, err := recIO.NewTripleParser(filePath)
 	if err != nil {
-		return nil, err
+		return nil, stats, err
 	}
 	defer tParser.Close()
 
@@ -52,7 +60,6 @@ func BuildGlossary(filePath string) (*Glossary, error) {
 	// Go through each triple and add it to the glossary, while also creating entries
 	// on-the-fly if they don't exist.
 	for trip, err := tParser.NextTriple(); trip != nil && err == nil; trip, err = tParser.NextTriple() {
-
 		// Get the predicate and make sure its either a label or description.
 		thisType := miscType
 		if bytes.Equal(trip.Predicate, wdLabelPredicate) {
@@ -65,6 +72,7 @@ func BuildGlossary(filePath string) (*Glossary, error) {
 
 		// Get the text and language of the triple object.
 		text, lang := io.InterpreteLangLiteral(trip.Object)
+
 		if len(text) == 0 || len(lang) == 0 { // Only accept entries where both text and lang exist.
 			continue
 		}
@@ -79,21 +87,25 @@ func BuildGlossary(filePath string) (*Glossary, error) {
 		if !thisContentOk {
 			thisContent = &Content{}
 			glos[*thisKey] = thisContent
+			stats.TotalPropertyCount += 1
+			stats.PropertiesPerLanguage[thisKey.Lang] = stats.PropertiesPerLanguage[thisKey.Lang] + 1
 		}
 
 		// Add the information of this triple to the glossary.
 		if thisType == labelType {
 			thisContent.Label = string(text)
+			stats.TotalLabelCount += 1
 		} else if thisType == descriptionType {
 			thisContent.Description = string(text)
+			stats.TotalDescriptionCount += 1
 		}
 
 	}
 	if err != nil {
-		return nil, err
+		return nil, stats, err
 	}
 
-	return &glos, nil
+	return &glos, stats, nil
 }
 
 // OutputStats of the glossary to stdout.

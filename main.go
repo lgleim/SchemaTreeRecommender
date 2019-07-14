@@ -199,14 +199,15 @@ func main() {
 			inputDataset := &args[0]
 
 			// Build the glossary
-			glos, err := glossary.BuildGlossary(*inputDataset)
+			glos, stats, err := glossary.BuildGlossary(*inputDataset)
 			if err != nil {
 				log.Panicln(err)
 			}
 
 			// Store it in the same directory with 'glossary.bin' extension
 			glos.WriteToFile(*inputDataset + ".glossary.bin")
-			glos.OutputStats()
+			fmt.Printf("%+v\n", stats)
+			//glos.OutputStats()
 		},
 	}
 
