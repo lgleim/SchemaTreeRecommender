@@ -5,6 +5,18 @@ import (
 )
 
 // Instance - An assessment on properties
+//
+// COMMENT: The assessment module might be too tighly coupled with the SchemaTree. In the
+//          early days the SchemaTree delegate the job of creating the input arguments to
+//          the caller of the method. The caller would create the IList and then pass it
+//          to the SchemaTree. This behaviour should be avoid because it makes too much
+//          internal information visible to the outside. The correct behaviour is to accept
+//          an array of strings (or byte-arrays) and then construct the IList oneself.
+//          To fix this issue in the future, please consider making IList and IItem private
+//          and then use the schematree.Recommend(props []string, types []string).
+//          Likewise, assessments should be working with arrays of strings and not IItems.
+//          The benefit in the current method is a faster evaluation since the IList
+//          construction does not need to be done multiple times.
 type Instance struct {
 	Props                 schematree.IList
 	tree                  *schematree.SchemaTree
@@ -16,6 +28,19 @@ type Instance struct {
 func NewInstance(argProps schematree.IList, argTree *schematree.SchemaTree, argUseCache bool) *Instance {
 	return &Instance{
 		Props:                 argProps,
+		tree:                  argTree,
+		useOptimisticCache:    argUseCache,
+		cachedRecommendations: nil,
+	}
+}
+
+// NewInstanceFromInput : constructor method to receive strings and convert them into the current
+// assessment format that uses IList.
+func NewInstanceFromInput(argProps []string, argTypes []string, argTree *schematree.SchemaTree, argUseCache bool) *Instance {
+	propList := argTree.BuildPropertyList(argProps, argTypes)
+
+	return &Instance{
+		Props:                 propList,
 		tree:                  argTree,
 		useOptimisticCache:    argUseCache,
 		cachedRecommendations: nil,

@@ -35,7 +35,8 @@ func (ps PropertyRecommendations) Top10AvgProbibility() float32 {
 	return float32(sum) / 10.0
 }
 
-// Recomend recommends a ranked list of property candidates by given strings
+// Recommend recommends a ranked list of property candidates by given strings
+// Note: This method should be used in the future where assessments have no access to IItem.
 func (tree *SchemaTree) Recommend(properties []string, types []string) PropertyRecommendations {
 
 	list := []*IItem{}
@@ -61,6 +62,31 @@ func (tree *SchemaTree) Recommend(properties []string, types []string) PropertyR
 	candidates = tree.RecommendProperty(list)
 
 	return candidates
+}
+
+// BuildPropertyList receives prop and type strings, and builds a list of IItem from it that can later
+// be used to execute the recommender.
+func (tree *SchemaTree) BuildPropertyList(properties []string, types []string) IList {
+
+	list := []*IItem{}
+	// Find IItems of property strings
+	for _, pString := range properties {
+		p, ok := tree.PropMap[pString]
+		if ok {
+			list = append(list, p)
+		}
+	}
+
+	// Find IItems of type strings
+	for _, tString := range types {
+		tString := "t#" + tString
+		p, ok := tree.PropMap[tString]
+		if ok {
+			list = append(list, p)
+		}
+	}
+
+	return list
 }
 
 // RecommendProperty recommends a ranked list of property candidates by given IItems
