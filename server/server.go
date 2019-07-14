@@ -78,9 +78,6 @@ func setupMappedRecommender(
 	// 	panic(errors)
 	// }
 
-	// Fetch the map of all properties in the SchemaTree
-	pMap := model.PropMap
-
 	return func(res http.ResponseWriter, req *http.Request) {
 
 		// Decode the JSON input and build a list of input strings
@@ -92,18 +89,10 @@ func setupMappedRecommender(
 		}
 		fmt.Println(input) // debug: output the request
 
-		// Match the input strings to build a list of input properties.
-		list := []*schematree.IItem{}
-		for _, pString := range input.Properties {
-			p, ok := pMap[pString]
-			if ok {
-				list = append(list, p)
-			}
-		}
-		// fmt.Println(tree.Support(list), tree.Root.Support)
+		// TODO: Probably some more input sanitization is required.
 
 		// Make an assessment of the input properties.
-		assessment := assessment.NewInstance(list, model, true) // TODO: Introduce types into the assessment.
+		assessment := assessment.NewInstanceFromInput(input.Properties, input.Types, model, true)
 
 		// Make a recommendation based on the assessed input and chosen strategy.
 		t1 := time.Now()
