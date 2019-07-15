@@ -13,11 +13,11 @@ func TestEval(t *testing.T) {
 	testData := "../testdata/10M.nt_1in2_test.gz"
 
 	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.bin")
-	f := false
-	stats, resources, hitRate, recommendationCount := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f, 0)
+	f := true
+	stats, resources, hitRate, recommendationCount := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f, 1)
 	statistics := makeStatistics(stats, resources, hitRate, recommendationCount)
 
-	fmt.Println(statistics[0].precision)
+	fmt.Printf("\n %v", statistics[0].precision)
 
 	for _, v := range statistics {
 		if v.top10 < 85 {

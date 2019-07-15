@@ -166,15 +166,29 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	roundID := uint16(1)
 	results := make(chan evalResult, 1000) // collect eval results via channel
 
+	setSup := float64(tree.Root.Support) // empty set occured in all transactions
+	emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+	for _, prop := range tree.PropMap {
+		emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
+			Property:    prop,
+			Probability: float64(prop.TotalCount) / setSup,
+		}
+	}
+
 	// evaluate the rank the recommender assigns the left out property
 	evaluate := func(properties schematree.IList, leftOutList schematree.IList, groupBy uint16) {
 		var duration uint64
 		var recs []schematree.RankedPropertyCandidate
 
-		start := time.Now()
-		asm := assessment.NewInstance(properties, tree, true)
-		recs = wf.Recommend(asm)
-		duration = uint64(time.Since(start).Nanoseconds())
+		if len(properties) == 0 {
+			recs = emptyRecs
+		} else {
+			start := time.Now()
+			asm := assessment.NewInstance(properties, tree, true)
+			recs = wf.Recommend(asm)
+			duration = uint64(time.Since(start).Nanoseconds())
+
+		}
 
 		for _, leftOut := range leftOutList {
 			included := false
@@ -202,6 +216,11 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		}
 		properties.Sort()
 
+		//use only entities with more than 3 properties
+		if len(properties) < 4 {
+			return
+		}
+
 		countTypes := 0
 		for _, property := range properties {
 			if property.IsType() {
@@ -213,6 +232,7 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		var leftOut schematree.IList
 
 		if countTypes == 0 {
+			//if no types, use the third most frequent properties
 			reducedEntitySet = properties[:3]
 			leftOut = properties[3:]
 		} else {
@@ -226,6 +246,7 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 				}
 			}
 		}
+		//here, the entries are not sorted by set size, bzt by this roundID, s.t. all results from one entity are grouped
 		roundID++
 		evaluate(reducedEntitySet, leftOut, roundID)
 	}
@@ -236,10 +257,6 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			properties = append(properties, p)
 		}
 		properties.Sort()
-
-		if len(properties) == 0 {
-			print("JKALSFJODSHFKJDSHFJKSHDJK")
-		}
 
 		// take out one property from the list at a time and determine in which position it will be recommended again
 		reducedEntitySet := make(schematree.IList, len(properties)-1, len(properties)-1)
@@ -261,19 +278,17 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	go func() {
 		wg.Add(1)
 		for res := range results {
-			//stats[0] = append(stats[0], res.position)
+			stats[0] = append(stats[0], res.position)
 			stats[res.setSize] = append(stats[res.setSize], res.position)
-			//durations[0] = append(durations[0], res.duration)
-			//durations[res.setSize] = append(durations[res.setSize], res.duration)
-			//hitRates[0] = append(hitRates[0], res.hit)
-			//hitRates[res.setSize] = append(hitRates[res.setSize], res.hit)
-			//recommendationCounts[0] = append(recommendationCounts[0], res.recommendationCount)
-			//recommendationCounts[res.setSize] = append(recommendationCounts[res.setSize], res.recommendationCount)
+			durations[0] = append(durations[0], res.duration)
+			durations[res.setSize] = append(durations[res.setSize], res.duration)
+			hitRates[0] = append(hitRates[0], res.hit)
+			hitRates[res.setSize] = append(hitRates[res.setSize], res.hit)
+			recommendationCounts[0] = append(recommendationCounts[0], res.recommendationCount)
+			recommendationCounts[res.setSize] = append(recommendationCounts[res.setSize], res.recommendationCount)
 		}
 		wg.Done()
 	}()
-
-	fmt.Printf("BBBBBBBBBBBBBBBBBBBBBBB")
 
 	if evalType == 0 {
 		//take 1 N
@@ -286,8 +301,6 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		close(results)
 		wg.Wait()
 	}
-
-	fmt.Printf("TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT")
 
 	return stats, durations, hitRates, recommendationCounts
 }
@@ -315,8 +328,6 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 	for k, v := range recommendationCounts {
 		recommendationCount[k] = recommendationCount[k] / float64(len(v))
 	}
-
-	fmt.Println(recommendationCount)
 
 	statistics = make([]evalSummary, len(stats))
 	setLens := make([]int, 0, len(stats))
@@ -349,7 +360,7 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / l
 		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 5 })) / l
 		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 10 })) / l
-		top500 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 499 })) / l
+		top500 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 499 }))
 
 		precision = top500 / r
 
@@ -400,6 +411,7 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 		} else {
 			subjects = float64(len(v)) / float64(setLen)
 		}
+
 		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), subjects, worst5average + 1, d, hitRate, precision}
 	}
 	return
