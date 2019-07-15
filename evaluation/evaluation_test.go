@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"recommender/configuration"
 	"recommender/schematree"
 	"recommender/strategy"
@@ -13,8 +14,10 @@ func TestEval(t *testing.T) {
 
 	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.bin")
 	f := false
-	stats, resources, hitRate := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f)
-	statistics := makeStatistics(stats, resources, hitRate)
+	stats, resources, hitRate, recommendationCount := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f, 0)
+	statistics := makeStatistics(stats, resources, hitRate, recommendationCount)
+
+	fmt.Println(statistics[0].precision)
 
 	for _, v := range statistics {
 		if v.top10 < 85 {
@@ -24,7 +27,7 @@ func TestEval(t *testing.T) {
 	}
 }
 
-func TestReadWriteConfigFile(t *testing.T) {
+func fTestReadWriteConfigFile(t *testing.T) {
 	l1 := configuration.Layer{"tooFewRecommendation", "splitProperty", 100, 0.6, "avg", "everySecondItem", "", 0}
 	cOut := configuration.Configuration{"../testdata/10M.nt_1in2_test.gz", []configuration.Layer{l1, l1}}
 	fileName := "./configs/test.json"
