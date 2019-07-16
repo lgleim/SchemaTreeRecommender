@@ -179,6 +179,12 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	evaluate := func(properties schematree.IList, leftOutList schematree.IList, groupBy uint16) {
 		var duration uint64
 		var recs []schematree.RankedPropertyCandidate
+		fmt.Println("arrived")
+
+		for _, prop := range properties {
+			fmt.Printf("just bevor test")
+			fmt.Printf("props %v \n", prop.Str)
+		}
 
 		if len(properties) == 0 {
 			recs = emptyRecs
@@ -189,8 +195,9 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			duration = uint64(time.Since(start).Nanoseconds())
 
 		}
-
+		fmt.Println("arrived2")
 		for _, leftOut := range leftOutList {
+
 			included := false
 			for i, r := range recs {
 				if r.Property == leftOut { // found item to recover
@@ -210,14 +217,23 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	}
 
 	handlerTakeButType := func(s *schematree.SubjectSummary) {
+		fmt.Println("--------------------")
+
+		for _, property := range s.Properties {
+			fmt.Printf("%v", property)
+		}
+		fmt.Println("")
 		properties := make(schematree.IList, 0, len(s.Properties))
 		for p := range s.Properties {
 			properties = append(properties, p)
 		}
 		properties.Sort()
 
+		fmt.Printf("props %v\n", len(properties))
+
 		//use only entities with more than 3 properties
 		if len(properties) < 4 {
+			fmt.Printf("exit")
 			return
 		}
 
@@ -227,6 +243,8 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 				countTypes += 1
 			}
 		}
+
+		fmt.Printf("types %v\n", countTypes)
 
 		var reducedEntitySet schematree.IList
 		var leftOut schematree.IList
@@ -248,6 +266,9 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		}
 		//here, the entries are not sorted by set size, bzt by this roundID, s.t. all results from one entity are grouped
 		roundID++
+		fmt.Printf("reduced %v\n", len(reducedEntitySet))
+		fmt.Printf("left out %v\n", len(leftOut))
+		fmt.Println("call")
 		evaluate(reducedEntitySet, leftOut, roundID)
 	}
 
