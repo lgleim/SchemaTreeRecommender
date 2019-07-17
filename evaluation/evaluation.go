@@ -248,13 +248,12 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 
 		var reducedEntitySet schematree.IList
 		var leftOut schematree.IList
-
 		if countTypes == 0 {
 			//if no types, use the third most frequent properties
 			reducedEntitySet = properties[:3]
 			leftOut = properties[3:]
 		} else {
-			reducedEntitySet = make(schematree.IList, countTypes, countTypes)
+			reducedEntitySet = make(schematree.IList, 0, countTypes)
 			leftOut = make(schematree.IList, len(properties)-countTypes, len(properties)-countTypes)
 			for _, property := range properties {
 				if property.IsType() {
