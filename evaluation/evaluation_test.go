@@ -1,4 +1,4 @@
-package main
+package evaluation
 
 import (
 	"fmt"
@@ -12,12 +12,10 @@ func TestEval(t *testing.T) {
 	//trainingData := "../testdata/10M.nt.gz"
 	testData := "../testdata/10M.nt_1in2_test.gz"
 
-	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.bin")
-	f := true
-	stats, resources, hitRate, recommendationCount := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f, 1)
-	statistics := makeStatistics(stats, resources, hitRate, recommendationCount)
+	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.typed.bin")
+	statistics := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &schema.Typed, 1)
 
-	fmt.Printf("\n %v", statistics[0].precision)
+	fmt.Printf("\n %+v", statistics[0])
 
 	for _, v := range statistics {
 		if v.top10 < 85 {

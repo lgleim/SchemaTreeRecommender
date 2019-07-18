@@ -1,4 +1,4 @@
-package main
+package evaluation
 
 import (
 	"fmt"
@@ -38,8 +38,7 @@ func runConfig(name *string, tree *schematree.SchemaTree, typed bool) (result ev
 	if err != nil {
 		return
 	}
-	stats, resources, hitRate, recommendationCount := evaluation(tree, &config.Testset, wf, &typed, 0)
-	result = makeStatistics(stats, resources, hitRate, recommendationCount)[0]
+	result = evaluation(tree, &config.Testset, wf, &typed, 0)[0]
 	return
 }
 
