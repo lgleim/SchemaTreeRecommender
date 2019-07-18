@@ -79,7 +79,24 @@ Output JSON-Schema:
 
 Example Output:
 
-TODO
+```json
+{
+  "recommendations": [
+    {
+			"property": "http://www.wikidata.org/prop/direct/P828",
+			"probability": 0.964267264,
+			"label": "has cause",
+			"description": "underlying cause, thing that ultimately resulted in this effect"
+		},
+    {
+			"property": "http://www.wikidata.org/prop/direct/P1889",
+			"probability": 0.874251324,
+			"label": "different from",
+			"description": "item that is different from another item, with which it is often confused"
+		}
+	]
+}
+```
 
 ### /lean-recommender
 

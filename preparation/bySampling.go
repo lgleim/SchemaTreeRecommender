@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"strconv"
-	"strings"
 	"unicode/utf8"
 
 	gzip "github.com/klauspost/pgzip"
@@ -79,7 +78,7 @@ func SplitBySampling(fileName string, oneInN int64) error {
 		// extract subject
 		_, token = firstWord(line)
 
-		if len(token) == 0 || token[0] == '#' || strings.Contains(string(token), "Special:EntityData") { // line is a comment
+		if len(token) == 0 || token[0] == '#' { // line is a comment
 			continue
 		}
 

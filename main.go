@@ -33,6 +33,7 @@ func main() {
 	var writeOutPropertyFreqs bool               // used by build-tree
 	var serveOnPort int                          // used by serve
 	var workflowFile string                      // used by serve
+	var contiguousInput bool                     // used by split-dataset:by-type
 	var everyNthSubject uint                     // used by split-dataset:1-in-n
 
 	// Setup helper variables
@@ -328,7 +329,13 @@ func main() {
 			inputDataset := &args[0]
 
 			// Make the split
-			sStats, err := preparation.SplitByType(*inputDataset)
+			var sStats *preparation.SplitByTypeStats
+			var err error
+			if contiguousInput {
+				sStats, err = preparation.SplitByTypeInBlocks(*inputDataset)
+			} else {
+				sStats, err = preparation.SplitByType(*inputDataset)
+			}
 			if err != nil {
 				log.Panicln(err)
 			}
@@ -342,8 +349,9 @@ func main() {
 
 		},
 	}
+	cmdSplitDatasetByType.Flags().BoolVarP(&contiguousInput, "contiguous", "c", false, "enable optimization for file with contiguous subjects")
 
-	// subsubcommand split-dataset by-type
+	// subsubcommand split-dataset by-prefix
 	cmdSplitDatasetByPrefix := &cobra.Command{
 		Use:   "by-prefix <dataset>",
 		Short: "Split a dataset according to the prefix of the subject",
@@ -373,7 +381,6 @@ func main() {
 	}
 
 	// subsubcommand split-dataset 1-in-n
-	// TODO: Explain naming convention used for split datasets
 	cmdSplitDatasetBySampling := &cobra.Command{
 		Use:   "1-in-n <dataset>",
 		Short: "Split a dataset using systematic sampling",

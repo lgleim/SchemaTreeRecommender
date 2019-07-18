@@ -15,11 +15,120 @@ type SplitByTypeStats struct {
 }
 
 // SplitByType will take a dataset and generate smaller datasets for each subject type it finds.
-// Types can be of following: item, property, other/miscellaneous
+// Types can be of following: item, property, other/miscellaneous.
+func SplitByType(filePath string) (*SplitByTypeStats, error) {
+	stats := SplitByTypeStats{}
+
+	// Setup attributes of the wikidata ontology
+	var wdTypePredicate = []byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>")
+	var wdItemObjects = [][]byte{
+		[]byte("<http://wikiba.se/ontology#Item>"),
+		[]byte("<http://wikiba.se/ontology-beta#Item>"), // included for retro-compatibility
+	}
+	var wdPropObjects = [][]byte{
+		[]byte("<http://wikiba.se/ontology#Property>"),
+		[]byte("<http://www.wikidata.org/ontology#Property>"), // included for retro-compatibility
+	}
+
+	// Define a N-Triple parser for the input file.
+	// The method will open the file twice because of the multiple read-interfaces applied on file.
+	var tParser *recIO.TripleParser
+	var err error
+
+	// Define the possible types.
+	const (
+		miscBlock = iota // its 'misc' if no better type is found
+		itemBlock = iota
+		propBlock = iota
+	)
+
+	// Open the file for the first passthrough.
+	tParser, err = recIO.NewTripleParser(filePath)
+	if err != nil {
+		tParser.Close()
+		return nil, err
+	}
+
+	// Will perform one pass on the entire file to identify subjects and categorize them.
+	subjectTypeMap := map[string]int{}
+	for trip, err := tParser.NextTriple(); trip != nil && err == nil; trip, err = tParser.NextTriple() {
+
+		// Identify if this entry is trying to describe a type, and get that type.
+		// Only register the mapping if the type is 'item' or 'prop. We do not need to store mappings for 'misc'.
+		// Also, the same predicate can occur multiple times and with values we ignore. Only take valid objects.
+		if bytes.Equal(trip.Predicate, wdTypePredicate) {
+			if equalToOneOf(trip.Object, wdItemObjects) {
+				subjectTypeMap[string(trip.Subject)] = itemBlock
+			} else if equalToOneOf(trip.Object, wdPropObjects) {
+				subjectTypeMap[string(trip.Subject)] = propBlock
+			}
+		}
+	}
+	if err != nil {
+		tParser.Close()
+		return nil, err
+	}
+	tParser.Close()
+
+	// Open 3 files, one to nest each type.
+	fileBase := recIO.TrimExtensions(filePath)
+	itemFile := recIO.CreateAndOpenWithGzip(fileBase + "-item.nt.gz")
+	defer itemFile.Close()
+	propFile := recIO.CreateAndOpenWithGzip(fileBase + "-prop.nt.gz")
+	defer propFile.Close()
+	miscFile := recIO.CreateAndOpenWithGzip(fileBase + "-misc.nt.gz")
+	defer miscFile.Close()
+
+	// Open the file for the second passthrough.
+	tParser, err = recIO.NewTripleParser(filePath)
+	if err != nil {
+		tParser.Close()
+		return nil, err
+	}
+
+	// On the second pass, go through all entries and send them to their file according to the mapping.
+	for trip, err := tParser.NextTriple(); trip != nil && err == nil; trip, err = tParser.NextTriple() {
+		mapType, mapOk := subjectTypeMap[string(trip.Subject)]
+
+		// Mapped items are guaranteed to have correct block. Misc if no mapping found.
+		var curBlockType int
+		if mapOk {
+			curBlockType = mapType
+		} else {
+			curBlockType = miscBlock
+		}
+
+		// Flush the buffer into one of the 3 files
+		switch curBlockType {
+		case itemBlock:
+			itemFile.Write(trip.Line)
+			itemFile.Write([]byte("\r\n"))
+			stats.ItemCount++
+		case propBlock:
+			propFile.Write(trip.Line)
+			propFile.Write([]byte("\r\n"))
+			stats.PropCount++
+		default:
+			miscFile.Write(trip.Line)
+			miscFile.Write([]byte("\r\n"))
+			stats.MiscCount++
+		}
+	}
+	if err != nil {
+		tParser.Close()
+		return nil, err
+	}
+	tParser.Close()
+
+	return &stats, nil
+}
+
+// SplitByTypeInBlocks is a faster implementation of SplitByType, using only a single pass, but assumes
+// that subjects are always found in contiguous lines.
 //
 // TODO: Maybe there is a need to remove the type-classifying predicates. It that happens
 //       then it should be made as an optional argument.
-func SplitByType(filePath string) (*SplitByTypeStats, error) {
+func SplitByTypeInBlocks(filePath string) (*SplitByTypeStats, error) {
 	stats := SplitByTypeStats{}
 
 	// Setup attributes of the wikidata ontology
