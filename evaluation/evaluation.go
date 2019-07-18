@@ -199,9 +199,9 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			included := false
 			for i, r := range recs {
 				if r.Property == leftOut { // found item to recover
-					for i > 0 && recs[i-1].Probability == r.Probability {
-						i--
-					}
+					//for i > 0 && recs[i-1].Probability == r.Probability {
+					//	i--
+					//}
 					results <- evalResult{groupBy, uint32(i) + 1, duration, true, uint16(len(recs))}
 					included = true
 					break
@@ -209,7 +209,7 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			}
 			//punish if not in recommendation rec included
 			if !included {
-				results <- evalResult{groupBy, 500, duration, false, uint16(len(recs))}
+				results <- evalResult{groupBy, 10000, duration, false, uint16(len(recs))}
 			}
 		}
 	}
@@ -302,12 +302,6 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	close(results)
 	wg.Wait()
 
-	for i, _ := range recommendationCounts {
-		if i < 10 {
-			fmt.Printf("%v\n", recommendationCounts[i+1])
-		}
-	}
-
 	return makeStatistics(stats, durations, hitRates, recommendationCounts)
 }
 
@@ -360,10 +354,6 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 
 		var sum uint64
 		var mean, meanSquare, median, variance, top1, top5, top10, precisionAt10, subjects, worst5average, hitRate, precision float64
-
-		if i < 5 {
-			fmt.Printf("%v", v)
-		}
 
 		l := float64(len(v))
 		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 1 })) / l
