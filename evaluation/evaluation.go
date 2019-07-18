@@ -1,10 +1,18 @@
 package evaluation
 
 import (
+	"flag"
+	"fmt"
+	"log"
 	"math"
+	"os"
 	"recommender/assessment"
+	"recommender/configuration"
 	"recommender/schematree"
 	"recommender/strategy"
+	"runtime"
+	"runtime/pprof"
+	"runtime/trace"
 	"sort"
 	"sync"
 	"time"
@@ -34,6 +42,123 @@ type evalSummary struct {
 	precision           float64
 	precisionAt10       float64
 	recommendationCount float64
+}
+
+func main() {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+
+	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
+	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
+	traceFile := flag.String("trace", "", "write execution trace to `file`")
+	trainedModel := flag.String("model", "", "read stored schematree from `file`")
+	configPath := flag.String("workflow", "", "Path to workflow config file for single evaluation")
+	testFile := flag.String("testSet", "", "the file to parse")
+	batchTest := flag.Bool("batchTest", false, "Switch between batch test and normal test")
+	createConfigs := flag.Bool("createConfigs", false, "Create a bunch of config")
+	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
+	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
+	typedEntities := flag.Bool("typed", false, "Use type information or not")
+
+	var statistics []evalSummary
+
+	// parse commandline arguments/flags
+	flag.Parse()
+
+	// write cpu profile to file
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal("could not create CPU profile: ", err)
+		}
+		if err := pprof.StartCPUProfile(f); err != nil {
+			log.Fatal("could not start CPU profile: ", err)
+		}
+		defer pprof.StopCPUProfile()
+	}
+
+	// write cpu profile to file
+	if *memprofile != "" {
+		defer func() {
+			f, err := os.Create(*memprofile)
+			if err != nil {
+				log.Fatal("could not create memory profile: ", err)
+			}
+			runtime.GC() // get up-to-date statistics
+			if err := pprof.WriteHeapProfile(f); err != nil {
+				log.Fatal("could not write memory profile: ", err)
+			}
+			f.Close()
+		}()
+	}
+
+	// write cpu profile to file
+	if *traceFile != "" {
+		f, err := os.Create(*traceFile)
+		if err != nil {
+			log.Fatal("could not create trace file: ", err)
+		}
+		if err := trace.Start(f); err != nil {
+			log.Fatal("could not start tracing: ", err)
+		}
+		defer trace.Stop()
+	}
+
+	if *createConfigs {
+		if *createConfigsCreater == "" {
+			log.Fatalln("A Create Config File must be provided in ./configs!")
+		}
+		createConfigFiles(createConfigsCreater)
+	} else if *batchTest {
+		// Run all config files and benchmark those. Schematree is taken from ../testdata/10M.nt.gz.schemaTree.bin
+		// test data is encoded in the config files
+		// Output is csv file in ./
+		if *trainedModel == "" {
+			log.Fatalln("A model must be provided for Batch Test!")
+			return
+		}
+		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities)
+		if err != nil {
+			log.Fatalln("Batch Config Failed", err)
+			return
+		}
+	} else {
+
+		if *testFile == "" {
+			log.Fatalln("A test set must be provided!")
+		}
+
+		// evaluation
+		if *trainedModel == "" {
+			log.Fatalln("A model must be provided!")
+		}
+		tree, err := schematree.LoadSchemaTree(*trainedModel)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		var wf *strategy.Workflow
+		if *configPath != "" {
+			//load workflow config if given
+			config, err := configuration.ReadConfigFile(configPath)
+			if err != nil {
+				log.Fatalln(err)
+			}
+			err = config.Test()
+			if err != nil {
+				log.Fatalln(err)
+			}
+			wf, err = configuration.ConfigToWorkflow(config, tree)
+			if err != nil {
+				log.Fatalln(err)
+			}
+		} else {
+			// if no workflow config given then run standard recommender
+			wf = strategy.MakePresetWorkflow("direct", tree)
+		}
+		statistics = evaluation(tree, testFile, wf, typedEntities, 0)
+	}
+	//so something with statistics
+	fmt.Printf("%v+", statistics[0])
 }
 
 func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool, evalType int) []evalSummary {
@@ -66,8 +191,7 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			start := time.Now()
 			asm := assessment.NewInstance(properties, tree, true)
 			recs = wf.Recommend(asm)
-			duration = uint64(time.Since(start).Nanoseconds())
-
+			duration = uint64(time.Since(start).Nanoseconds() / 1000000)
 		}
 
 		for _, leftOut := range leftOutList {
@@ -75,9 +199,9 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			included := false
 			for i, r := range recs {
 				if r.Property == leftOut { // found item to recover
-					//for i > 0 && recs[i-1].Probability == r.Probability {
-					//	i--
-					//}
+					for i > 0 && recs[i-1].Probability == r.Probability {
+						i--
+					}
 					results <- evalResult{groupBy, uint32(i) + 1, duration, true, uint16(len(recs))}
 					included = true
 					break
@@ -178,6 +302,12 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	close(results)
 	wg.Wait()
 
+	for i, _ := range recommendationCounts {
+		if i < 10 {
+			fmt.Printf("%v\n", recommendationCounts[i+1])
+		}
+	}
+
 	return makeStatistics(stats, durations, hitRates, recommendationCounts)
 }
 
@@ -231,14 +361,26 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 		var sum uint64
 		var mean, meanSquare, median, variance, top1, top5, top10, precisionAt10, subjects, worst5average, hitRate, precision float64
 
+		if i < 5 {
+			fmt.Printf("%v", v)
+		}
+
 		l := float64(len(v))
 		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 1 })) / l
 		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 5 })) / l
 		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / l
-		hitCount := float64(sort.Search(len(v), func(i int) bool { return v[i] > 499 }))
+
+		hitCount := 0
+		for _, hit := range h {
+			if hit {
+				hitCount++
+			}
+		}
+
+		hitRate = float64(hitCount) / float64(len(h))
 
 		if r > 0 {
-			precision = hitCount / r
+			precision = float64(hitCount) / r
 		} else {
 			precision = 1
 		}
@@ -273,21 +415,11 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 			if len(worst5) == 0 {
 				worst5 = append(worst5, 0)
 			}
-
 			sum = 0
 			for _, value := range worst5 {
 				sum += uint64(value)
 			}
 			worst5average = float64(sum) / float64(len(worst5))
-
-			sum = 0
-			for _, x := range h {
-				if x {
-					sum++
-				}
-			}
-			hitRate = float64(sum) / float64(len(h))
-
 		}
 
 		if setLen == 0 {
