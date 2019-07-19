@@ -1,4 +1,4 @@
-package evaluation
+package main
 
 import (
 	"fmt"

@@ -7,7 +7,7 @@
 // implementation in the labeling package, ©2014 Justin Talbot (Licensed
 // MIT+file LICENSE|Unlimited).
 
-package evaluation
+package main
 
 import (
 	"math"

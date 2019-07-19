@@ -1,4 +1,4 @@
-package evaluation
+package main
 
 import (
 	"flag"
@@ -156,6 +156,7 @@ func main() {
 			wf = strategy.MakePresetWorkflow("direct", tree)
 		}
 		statistics = evaluation(tree, testFile, wf, typedEntities, 0)
+		writeStatisticsToFile(*testFile, statistics)
 	}
 	//so something with statistics
 	fmt.Printf("%v+", statistics[0])
@@ -420,5 +421,17 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 
 		statistics[i] = evalSummary{setLen, median, mean, math.Sqrt(variance), top1, top5, top10, len(v), subjects, worst5average, d, hitRate, precision, precisionAt10, r}
 	}
+	return
+}
+
+func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
+	output := fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v,%8v %8v, %8v, %8v,%8v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "Precision at 10", "Recommendation Count")
+
+	for _, stat := range statistics {
+		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v, %8.8,%8.8,%8.8,%8.8,%8.8f\n", stat.setSize, stat.median, stat.mean, math.Sqrt(stat.variance), stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
+	}
+	f, _ := os.Create(filename + ".csv")
+	f.WriteString(output)
+	f.Close()
 	return
 }
