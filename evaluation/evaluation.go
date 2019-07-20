@@ -157,9 +157,10 @@ func main() {
 		}
 		statistics = evaluation(tree, testFile, wf, typedEntities, 0)
 		writeStatisticsToFile(*testFile, statistics)
+		fmt.Printf("%v+", statistics[0])
 	}
 	//so something with statistics
-	fmt.Printf("%v+", statistics[0])
+	//fmt.Printf("%v+", statistics[0])
 }
 
 func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool, evalType int) []evalSummary {
@@ -425,10 +426,10 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 }
 
 func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
-	output := fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v,%8v %8v, %8v, %8v,%8v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "Precision at 10", "Recommendation Count")
+	output := fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v,%8v, %8v, %8v, %8v,%8v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "Precision at 10", "Recommendation Count")
 
 	for _, stat := range statistics {
-		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v, %8.8,%8.8,%8.8,%8.8,%8.8f\n", stat.setSize, stat.median, stat.mean, math.Sqrt(stat.variance), stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
+		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f\n", stat.setSize, stat.median, stat.mean, math.Sqrt(stat.variance), stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
 	}
 	f, _ := os.Create(filename + ".csv")
 	f.WriteString(output)

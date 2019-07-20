@@ -24,7 +24,7 @@ func TestEval(t *testing.T) {
 	}
 }
 
-func fTestReadWriteConfigFile(t *testing.T) {
+func TestReadWriteConfigFile(t *testing.T) {
 	l1 := configuration.Layer{"tooFewRecommendation", "splitProperty", 100, 0.6, "avg", "everySecondItem", "", 0}
 	cOut := configuration.Configuration{"../testdata/10M.nt_1in2_test.gz", []configuration.Layer{l1, l1}}
 	fileName := "./configs/test.json"
@@ -69,4 +69,8 @@ func fTestReadWriteConfigFile(t *testing.T) {
 		}
 	}
 
+}
+
+func TestConfigBatch(t *testing.T) {
+	batchConfigBenchmark("../testdata/10M.nt.gz.schemaTree.typed.bin", 1, true)
 }
