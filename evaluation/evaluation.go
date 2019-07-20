@@ -58,6 +58,7 @@ func main() {
 	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
+	handlerType := flag.String("handler", "handlerTake1N", "Choose the handler handlerTakeButType or handlerTake1N ")
 
 	var statistics []evalSummary
 
@@ -116,7 +117,7 @@ func main() {
 			log.Fatalln("A model must be provided for Batch Test!")
 			return
 		}
-		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities)
+		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities, *handlerType)
 		if err != nil {
 			log.Fatalln("Batch Config Failed", err)
 			return
@@ -155,7 +156,7 @@ func main() {
 			// if no workflow config given then run standard recommender
 			wf = strategy.MakePresetWorkflow("direct", tree)
 		}
-		statistics = evaluation(tree, testFile, wf, typedEntities, 0)
+		statistics = evaluation(tree, testFile, wf, typedEntities, *handlerType)
 		writeStatisticsToFile(*testFile, statistics)
 		fmt.Printf("%v+", statistics[0])
 	}
@@ -163,7 +164,7 @@ func main() {
 	//fmt.Printf("%v+", statistics[0])
 }
 
-func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool, evalType int) []evalSummary {
+func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool, evalType string) []evalSummary {
 	durations := make(map[uint16][]uint64)
 	stats := make(map[uint16][]uint32)
 	hitRates := make(map[uint16][]bool)
@@ -293,10 +294,10 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		wg.Done()
 	}()
 
-	if evalType == 0 {
+	if evalType == "handlerTake1N" {
 		//take 1 N
 		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTake1N, 0, *typed)
-	} else if evalType == 1 {
+	} else if evalType == "handlerTakeButType" {
 		//take all but types
 		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTakeButType, 0, *typed)
 	}

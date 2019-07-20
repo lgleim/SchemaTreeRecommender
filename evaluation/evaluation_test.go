@@ -13,7 +13,7 @@ func TestEval(t *testing.T) {
 	testData := "../testdata/10M.nt_1in2_test.gz"
 
 	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.typed.bin")
-	statistics := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &schema.Typed, 0)
+	statistics := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &schema.Typed, "handlerTakeButType")
 
 	fmt.Printf("\n %+v", statistics[0])
 
@@ -69,8 +69,4 @@ func TestReadWriteConfigFile(t *testing.T) {
 		}
 	}
 
-}
-
-func TestConfigBatch(t *testing.T) {
-	batchConfigBenchmark("../testdata/10M.nt.gz.schemaTree.typed.bin", 1, true)
 }

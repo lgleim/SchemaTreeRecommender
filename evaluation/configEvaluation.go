@@ -9,7 +9,7 @@ import (
 
 // Run all config files defined in ./configs and create a results csv table in ./
 // with schematree in ../testdata/10M.nt.gz.schemaTree.bin
-func batchConfigBenchmark(treePath string, configs int, typed bool) (err error) {
+func batchConfigBenchmark(treePath string, configs int, typed bool, handler string) (err error) {
 
 	schema, err := schematree.LoadSchemaTree(treePath)
 	if err != nil {
@@ -19,7 +19,7 @@ func batchConfigBenchmark(treePath string, configs int, typed bool) (err error) 
 	eval := make([]evalSummary, 0, configs)
 	for i := 0; i < configs; i++ {
 		filename = fmt.Sprintf("./configs/config_%v.json", i)
-		res, err := runConfig(&filename, schema, typed)
+		res, err := runConfig(&filename, schema, typed, handler)
 		if err != nil {
 			return err
 		}
@@ -29,7 +29,7 @@ func batchConfigBenchmark(treePath string, configs int, typed bool) (err error) 
 	return nil
 }
 
-func runConfig(name *string, tree *schematree.SchemaTree, typed bool) (result evalSummary, err error) {
+func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler string) (result evalSummary, err error) {
 	config, err := configuration.ReadConfigFile(name)
 	if err != nil {
 		return
@@ -38,7 +38,7 @@ func runConfig(name *string, tree *schematree.SchemaTree, typed bool) (result ev
 	if err != nil {
 		return
 	}
-	result = evaluation(tree, &config.Testset, wf, &typed, 0)[0]
+	result = evaluation(tree, &config.Testset, wf, &typed, handler)[0]
 	return
 }
 
