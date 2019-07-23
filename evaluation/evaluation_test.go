@@ -10,7 +10,7 @@ import (
 
 func TestEval(t *testing.T) {
 	//trainingData := "../testdata/10M.nt.gz"
-	testData := "../testdata/10M.nt_1in2_test.gz"
+	testData := "../testdata/10M.nt_1in2_test"
 
 	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.typed.bin")
 	statistics := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &schema.Typed, "handlerTakeButType")

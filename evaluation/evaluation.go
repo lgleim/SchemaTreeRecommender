@@ -156,6 +156,7 @@ func main() {
 			// if no workflow config given then run standard recommender
 			wf = strategy.MakePresetWorkflow("direct", tree)
 		}
+
 		statistics = evaluation(tree, testFile, wf, typedEntities, *handlerType)
 		writeStatisticsToFile(*testFile, statistics)
 		fmt.Printf("%v+", statistics[0])
@@ -172,16 +173,8 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 
 	var wg sync.WaitGroup
 	roundID := uint16(1)
+	var mutex = &sync.Mutex{}
 	results := make(chan evalResult, 1000) // collect eval results via channel
-
-	setSup := float64(tree.Root.Support) // empty set occured in all transactions
-	emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
-	for _, prop := range tree.PropMap {
-		emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
-			Property:    prop,
-			Probability: float64(prop.TotalCount) / setSup,
-		}
-	}
 
 	// evaluate the rank the recommender assigns the left out property
 	evaluate := func(properties schematree.IList, leftOutList schematree.IList, groupBy uint16) {
@@ -189,7 +182,16 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 		var recs []schematree.RankedPropertyCandidate
 
 		if len(properties) == 0 {
-			recs = emptyRecs
+			return
+			//setSup := float64(tree.Root.Support) // empty set occured in all transactions
+			//emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+			//for _, prop := range tree.PropMap {
+			//	emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
+			//		Property:    prop,
+			//		Probability: float64(prop.TotalCount) / setSup,
+			//	}
+			//}
+			//recs = emptyRecs
 		} else {
 			start := time.Now()
 			asm := assessment.NewInstance(properties, tree, true)
@@ -218,7 +220,6 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	}
 
 	handlerTakeButType := func(s *schematree.SubjectSummary) {
-
 		properties := make(schematree.IList, 0, len(s.Properties))
 		for p := range s.Properties {
 			properties = append(properties, p)
@@ -251,8 +252,10 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			}
 		}
 		//here, the entries are not sorted by set size, bzt by this roundID, s.t. all results from one entity are grouped
+		mutex.Lock()
 		roundID++
 		evaluate(reducedEntitySet, leftOut, roundID)
+		mutex.Unlock()
 	}
 
 	handlerTake1N := func(s *schematree.SubjectSummary) {
@@ -261,6 +264,10 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 			properties = append(properties, p)
 		}
 		properties.Sort()
+
+		if len(properties) == 0 {
+			return
+		}
 
 		// take out one property from the list at a time and determine in which position it will be recommended again
 		reducedEntitySet := make(schematree.IList, len(properties)-1, len(properties)-1)
@@ -427,10 +434,10 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 }
 
 func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
-	output := fmt.Sprintf("%8s, %9s, %9s, %9s, %9s, %9s, %9s, %10s, %9s, %9s, %9s, %9s, %13s, %19s\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "PrecisionAt10", "RecommendationCount")
+	output := fmt.Sprintf("%8s, %8s, %10s, %9s, %8s, %8s, %8s, %10s, %11s, %8s, %8s, %8s, %13s, %19s\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "PrecisionAt10", "RecommendationCount")
 
 	for _, stat := range statistics {
-		output += fmt.Sprintf("%8v, %8.1v, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f, %10v, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f\n", stat.setSize, stat.median, stat.mean, stat.stddev, stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
+		output += fmt.Sprintf("%8v, %8.1f, %10.4f, %9.4f, %8.4f, %8.4f, %8.4f, %10v, %11.4f, %8.4f, %8.4f, %8.4f, %13.4f, %19.4f\n", stat.setSize, stat.median, stat.mean, stat.stddev, stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
 	}
 	f, _ := os.Create(filename + ".csv")
 	f.WriteString(output)
