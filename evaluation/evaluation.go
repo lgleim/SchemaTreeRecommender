@@ -30,7 +30,7 @@ type evalSummary struct {
 	setSize             int
 	median              float64
 	mean                float64
-	variance            float64
+	stddev              float64
 	top1                float64
 	top5                float64
 	top10               float64
@@ -427,10 +427,10 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 }
 
 func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
-	output := fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v,%8v, %8v, %8v, %8v,%8v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "Precision at 10", "Recommendation Count")
+	output := fmt.Sprintf("%8s, %9s, %9s, %9s, %9s, %9s, %9s, %10s, %9s, %9s, %9s, %9s, %13s, %19s\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "PrecisionAt10", "RecommendationCount")
 
 	for _, stat := range statistics {
-		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f\n", stat.setSize, stat.median, stat.mean, math.Sqrt(stat.variance), stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
+		output += fmt.Sprintf("%8v, %8.1v, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f, %10v, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f, %8.4f\n", stat.setSize, stat.median, stat.mean, stat.stddev, stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
 	}
 	f, _ := os.Create(filename + ".csv")
 	f.WriteString(output)

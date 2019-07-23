@@ -19,7 +19,7 @@ func TestEval(t *testing.T) {
 
 	for i, v := range statistics {
 		if i < 15 {
-			fmt.Printf("\n %+v", v.top10)
+			fmt.Printf("\n %+v", v.precisionAt10)
 		}
 	}
 }
