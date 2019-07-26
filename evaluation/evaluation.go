@@ -172,92 +172,95 @@ func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Work
 	recommendationCounts := make(map[uint16][]uint16)
 
 	var wg sync.WaitGroup
-	roundID := uint16(1)
-	var mutex = &sync.Mutex{}
 	results := make(chan evalResult, 1000) // collect eval results via channel
 
-	// evaluate the rank the recommender assigns the left out property
-	evaluate := func(properties schematree.IList, leftOutList schematree.IList, groupBy uint16) {
+	// used in the past for defined an incrementing counter used by all evaluate threads
+	//     roundID := uint16(1)
+	//     var mutex = &sync.Mutex{}
+
+	// evaluate will take a list of reduced properties, run the recommender workflow with those reduced
+	// properties, and generate evaluation result entries by using the recently adquired recommendations
+	// and the leftout properties.
+	// The aim is to evaluate how well the leftout properties appear in the recommendations that are
+	// generated using the properties.
+	evaluate := func(reducedProps schematree.IList, leftOutProps schematree.IList, groupBy uint16) {
 		var duration uint64
 		var recs []schematree.RankedPropertyCandidate
 
-		if len(properties) == 0 {
+		// Evaluator will not generate stats if no properties exist to make a recommendation.
+		if len(reducedProps) == 0 {
 			return
-			//setSup := float64(tree.Root.Support) // empty set occured in all transactions
-			//emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
-			//for _, prop := range tree.PropMap {
-			//	emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
-			//		Property:    prop,
-			//		Probability: float64(prop.TotalCount) / setSup,
-			//	}
-			//}
-			//recs = emptyRecs
-		} else {
-			start := time.Now()
-			asm := assessment.NewInstance(properties, tree, true)
-			recs = wf.Recommend(asm)
-			duration = uint64(time.Since(start).Nanoseconds() / 1000000)
 		}
 
-		for _, leftOut := range leftOutList {
+		// Run the recommender with the input properties.
+		start := time.Now()
+		asm := assessment.NewInstance(reducedProps, tree, true)
+		recs = wf.Recommend(asm)
+		duration = uint64(time.Since(start).Nanoseconds() / 1000000)
 
-			included := false
+		// For every left out property, check if it mentioned in the recommendations.
+		for _, lop := range leftOutProps { // lop => left out property
+
+			isIncluded := false
 			for i, r := range recs {
-				if r.Property == leftOut { // found item to recover
+				if r.Property == lop { // found item to recover
 					//for i > 0 && recs[i-1].Probability == r.Probability {
 					//	i--
 					//}
 					results <- evalResult{groupBy, uint32(i) + 1, duration, true, uint16(len(recs))}
-					included = true
+					isIncluded = true
 					break
 				}
 			}
-			//punish if not in recommendation rec included
-			if !included {
+
+			// If the left out property was not found in the recommendations, generate an
+			// evalResult that punishes the statistic.
+			if !isIncluded {
 				results <- evalResult{groupBy, 10000, duration, false, uint16(len(recs))}
 			}
 		}
 	}
 
-	handlerTakeButType := func(s *schematree.SubjectSummary) {
-		properties := make(schematree.IList, 0, len(s.Properties))
-		for p := range s.Properties {
-			properties = append(properties, p)
-		}
-		properties.Sort()
+	// handleTakeButType is a handler method that, upon receiving a subject summary,
+	// will call the evaluator with all type properties as reduced properties and all
+	// others as left out properties.
+	handlerTakeButType := func(summary *schematree.SubjectSummary) {
 
+		// Count the number of types and non-types. This is an optimization to speed up
+		// the subset generation.
 		countTypes := 0
-		for _, property := range properties {
+		for property := range summary.Properties {
 			if property.IsType() {
 				countTypes += 1
 			}
 		}
 
-		var reducedEntitySet schematree.IList
-		var leftOut schematree.IList
-		if countTypes == 0 {
-			return
-			//if no types, use the third most frequent properties
-			//reducedEntitySet = properties[:3]
-			//leftOut = properties[3:]
-		} else {
-			reducedEntitySet = make(schematree.IList, 0, countTypes)
-			leftOut = make(schematree.IList, len(properties)-countTypes, len(properties)-countTypes)
-			for _, property := range properties {
-				if property.IsType() {
-					reducedEntitySet = append(reducedEntitySet, property)
-				} else {
-					leftOut = append(leftOut, property)
-				}
+		// Create and fill both subsets
+		reducedProps := make(schematree.IList, 0, countTypes)
+		leftOutProps := make(schematree.IList, 0, len(summary.Properties)-countTypes)
+		for property := range summary.Properties {
+			if property.IsType() {
+				reducedProps = append(reducedProps, property)
+			} else {
+				leftOutProps = append(leftOutProps, property)
 			}
 		}
-		//here, the entries are not sorted by set size, bzt by this roundID, s.t. all results from one entity are grouped
-		mutex.Lock()
-		roundID++
-		evaluate(reducedEntitySet, leftOut, roundID)
-		mutex.Unlock()
+
+		// evalResults will be grouped by the setSize used to generate the recommendations.
+		evaluate(reducedProps, leftOutProps, uint16(countTypes))
+
+		// Another possible method would be to group by subject. This method has been done in
+		// the past by having a shared counter.
+		//     mutex.Lock()
+		//     roundID++
+		//     localRoundID := roundID // important that this copies by value
+		//     mutex.Unlock()
+		//     evaluate(reducedProps, leftOutProps, localRoundID)
 	}
 
+	// handlerTake1N is a handler method that, upon receiving a subject summary,
+	// it will use leave-one-out (or jackknife resampling) to generate and evalResults
+	// for every property that is left out.
 	handlerTake1N := func(s *schematree.SubjectSummary) {
 		properties := make(schematree.IList, 0, len(s.Properties))
 		for p := range s.Properties {
