@@ -29,7 +29,7 @@ func batchConfigBenchmark(treePath string, configs int, typed bool, handler stri
 	return nil
 }
 
-func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler string) (result evalSummary, err error) {
+func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler string) (statistic evalSummary, err error) {
 	config, err := configuration.ReadConfigFile(name)
 	if err != nil {
 		return
@@ -38,7 +38,8 @@ func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler st
 	if err != nil {
 		return
 	}
-	result = evaluation(tree, &config.Testset, wf, &typed, handler)[0]
+	results := evaluateDataset(tree, wf, typed, config.Testset, handler)
+	statistic = makeStatistics(results)[0]
 	return
 }
 

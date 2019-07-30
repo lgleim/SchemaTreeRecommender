@@ -1,29 +1,28 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"recommender/assessment"
-	"recommender/configuration"
 	"recommender/schematree"
 	"recommender/strategy"
-	"runtime"
-	"runtime/pprof"
-	"runtime/trace"
 	"sort"
 	"sync"
 	"time"
 )
 
 type evalResult struct {
-	setSize             uint16
-	position            uint32
-	duration            uint64
-	hit                 bool
-	recommendationCount uint16
+	setSize    uint16 // number of properties used to generate recommendations (both type and non-type)
+	numTypes   uint16 // number of type properties in the property set
+	numLeftOut uint16 // number of properties that have been left out an needed to be recommended back
+	rank       uint32 // rank calculated for recommendation, equal to lec(recommendations)+1 if not fully recommendated back
+	numTP      uint32 // confusion matrix - number of left out properties that have been recommended
+	numFP      uint32 // confusion matrix - number of recommendations that have not been left out
+	numTN      uint32 // confusion matrix - number of properties that have neither been recommended or left out
+	numFN      uint32 // confusion matrix - number of properties that are left out but have not been recommended
+	duration   int64  // duration (in nanoseconds) of how long the recommendation took
+	group      uint16 // extra value that can store values like custom-made groups
 }
 
 type evalSummary struct {
@@ -44,281 +43,200 @@ type evalSummary struct {
 	recommendationCount float64
 }
 
-func main() {
-	runtime.GOMAXPROCS(runtime.NumCPU())
+// evaluatePair will generate an evalResult for a pair of ( reducedProps , leftOutProps ).
+// This function will take a list of reduced properties, run the recommender workflow with
+// those reduced properties, generate evaluation result entries by using the recently adquired
+// recommendations and the leftout properties.
+// The aim is to evaluate how well the leftout properties appear in the recommendations that are
+// generated using the reduced set of properties (from where the properties have been left out).
+func evaluatePair(
+	tree *schematree.SchemaTree,
+	workflow *strategy.Workflow,
+	reducedProps schematree.IList,
+	leftOutProps schematree.IList,
+) *evalResult {
 
-	cpuprofile := flag.String("cpuprofile", "", "write cpu profile to `file`")
-	memprofile := flag.String("memprofile", "", "write memory profile to `file`")
-	traceFile := flag.String("trace", "", "write execution trace to `file`")
-	trainedModel := flag.String("model", "", "read stored schematree from `file`")
-	configPath := flag.String("workflow", "", "Path to workflow config file for single evaluation")
-	testFile := flag.String("testSet", "", "the file to parse")
-	batchTest := flag.Bool("batchTest", false, "Switch between batch test and normal test")
-	createConfigs := flag.Bool("createConfigs", false, "Create a bunch of config")
-	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
-	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
-	typedEntities := flag.Bool("typed", false, "Use type information or not")
-	handlerType := flag.String("handler", "handlerTake1N", "Choose the handler handlerTakeButType or handlerTake1N ")
-
-	var statistics []evalSummary
-
-	// parse commandline arguments/flags
-	flag.Parse()
-
-	// write cpu profile to file
-	if *cpuprofile != "" {
-		f, err := os.Create(*cpuprofile)
-		if err != nil {
-			log.Fatal("could not create CPU profile: ", err)
-		}
-		if err := pprof.StartCPUProfile(f); err != nil {
-			log.Fatal("could not start CPU profile: ", err)
-		}
-		defer pprof.StopCPUProfile()
+	// Evaluator will not generate stats if no properties exist to make a recommendation.
+	if len(reducedProps) == 0 {
+		return nil
 	}
 
-	// write cpu profile to file
-	if *memprofile != "" {
-		defer func() {
-			f, err := os.Create(*memprofile)
-			if err != nil {
-				log.Fatal("could not create memory profile: ", err)
+	// Run the recommender with the input properties.
+	start := time.Now()
+	asm := assessment.NewInstance(reducedProps, tree, true)
+	recs := workflow.Recommend(asm)
+	duration := time.Since(start).Nanoseconds()
+
+	// Calculate the statistics for the evalResult
+
+	// Count the number of properties in the reduced set that are types.
+	var numTypeProps uint16
+	for _, rp := range reducedProps {
+		if rp.IsType() {
+			numTypeProps++
+		}
+	}
+
+	// Iterate through the list of left out properties to detect matching recommendations.
+	var maxMatchIndex = 0 // indexes always start at zero
+	var numTP, numFP, numFN, numTN uint32
+	for _, lop := range leftOutProps {
+
+		// First go through all recommendations and see if a matching property was found.
+		var matchFound bool
+		var matchIndex int
+		for i, rec := range recs {
+			if rec.Property == lop { // @todo: check if same pointers
+				matchFound = true
+				matchIndex = i
+				break
 			}
-			runtime.GC() // get up-to-date statistics
-			if err := pprof.WriteHeapProfile(f); err != nil {
-				log.Fatal("could not write memory profile: ", err)
+		}
+
+		// If the current left-out property has a matching recommendation.
+		// Calculating the maxMatchIndex helps in the future to calculate the rank.
+		if matchFound {
+			numTP++ // in practice this is also the number of matches
+			if matchIndex > maxMatchIndex {
+				maxMatchIndex = matchIndex
 			}
-			f.Close()
-		}()
-	}
+		}
 
-	// write cpu profile to file
-	if *traceFile != "" {
-		f, err := os.Create(*traceFile)
-		if err != nil {
-			log.Fatal("could not create trace file: ", err)
+		// If the current left-out property does not have a matching recommendation.
+		if !matchFound {
+			numFN++
 		}
-		if err := trace.Start(f); err != nil {
-			log.Fatal("could not start tracing: ", err)
-		}
-		defer trace.Stop()
 	}
+	numFP = uint32(len(recs)) - numTP
+	numTN = uint32(len(tree.PropMap)) - numTP - numFN - numFP
 
-	if *createConfigs {
-		if *createConfigsCreater == "" {
-			log.Fatalln("A Create Config File must be provided in ./configs!")
-		}
-		createConfigFiles(createConfigsCreater)
-	} else if *batchTest {
-		// Run all config files and benchmark those. Schematree is taken from ../testdata/10M.nt.gz.schemaTree.bin
-		// test data is encoded in the config files
-		// Output is csv file in ./
-		if *trainedModel == "" {
-			log.Fatalln("A model must be provided for Batch Test!")
-			return
-		}
-		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities, *handlerType)
-		if err != nil {
-			log.Fatalln("Batch Config Failed", err)
-			return
-		}
+	// Calculate the rank: the number of non-left out properties that were given before
+	// all left-out properties are recommended, plus 1.
+	// When all recommendation have been found, we can derive by taking the maximal index
+	// of all matches and using the number of matches to find out how many non-matching
+	// recommendations exists until that maximal match index.
+	// If not recommendations were found, we add a penalizing number.
+	var rank uint32
+	if numTP == uint32(len(leftOutProps)) {
+		rank = uint32(maxMatchIndex + 1 - len(leftOutProps))
 	} else {
-
-		if *testFile == "" {
-			log.Fatalln("A test set must be provided!")
-		}
-
-		// evaluation
-		if *trainedModel == "" {
-			log.Fatalln("A model must be provided!")
-		}
-		tree, err := schematree.LoadSchemaTree(*trainedModel)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		var wf *strategy.Workflow
-		if *configPath != "" {
-			//load workflow config if given
-			config, err := configuration.ReadConfigFile(configPath)
-			if err != nil {
-				log.Fatalln(err)
-			}
-			err = config.Test()
-			if err != nil {
-				log.Fatalln(err)
-			}
-			wf, err = configuration.ConfigToWorkflow(config, tree)
-			if err != nil {
-				log.Fatalln(err)
-			}
-		} else {
-			// if no workflow config given then run standard recommender
-			wf = strategy.MakePresetWorkflow("direct", tree)
-		}
-
-		statistics = evaluation(tree, testFile, wf, typedEntities, *handlerType)
-		writeStatisticsToFile(*testFile, statistics)
-		fmt.Printf("%v+", statistics[0])
+		rank = uint32(len(recs) + 1) // could be 10000 too
 	}
-	//so something with statistics
-	//fmt.Printf("%v+", statistics[0])
+
+	// Prepare the full evalResult by deriving some values.
+	result := evalResult{
+		setSize:    uint16(len(reducedProps)),
+		numTypes:   numTypeProps,
+		numLeftOut: uint16(len(leftOutProps)),
+		rank:       rank,
+		numTP:      numTP,
+		numFN:      numFN,
+		numFP:      numFP,
+		numTN:      numTN,
+		duration:   duration,
+	}
+	return &result
 }
 
-func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool, evalType string) []evalSummary {
-	durations := make(map[uint16][]uint64)
-	stats := make(map[uint16][]uint32)
-	hitRates := make(map[uint16][]bool)
-	recommendationCounts := make(map[uint16][]uint16)
+// performEvaluation will produce an evaluation CSV, where a test `dataset` is applied on a
+// constructed SchemaTree `tree`, by using the strategy `workflow`.
+// A parameter `isTyped` is required to provide for reading the dataset and it has to be synchronized
+// with the build SchemaTree model.
+// `evalMethod` will set which sampling procedures will be used for the test.
+func evaluateDataset(
+	tree *schematree.SchemaTree,
+	workflow *strategy.Workflow,
+	isTyped bool,
+	filePath string,
+	evalMethod string,
+) []evalResult {
 
-	var wg sync.WaitGroup
-	results := make(chan evalResult, 1000) // collect eval results via channel
+	// Initialize required variables for managing all the results with multiple threads.
+	resultList := make([]evalResult, 0)
+	resultWaitGroup := sync.WaitGroup{}
+	resultQueue := make(chan evalResult, 1000) // collect eval results via channel
 
-	// used in the past for defined an incrementing counter used by all evaluate threads
-	//     roundID := uint16(1)
-	//     var mutex = &sync.Mutex{}
-
-	// evaluate will take a list of reduced properties, run the recommender workflow with those reduced
-	// properties, and generate evaluation result entries by using the recently adquired recommendations
-	// and the leftout properties.
-	// The aim is to evaluate how well the leftout properties appear in the recommendations that are
-	// generated using the properties.
-	evaluate := func(reducedProps schematree.IList, leftOutProps schematree.IList, groupBy uint16) {
-		var duration uint64
-		var recs []schematree.RankedPropertyCandidate
-
-		// Evaluator will not generate stats if no properties exist to make a recommendation.
-		if len(reducedProps) == 0 {
-			return
-		}
-
-		// Run the recommender with the input properties.
-		start := time.Now()
-		asm := assessment.NewInstance(reducedProps, tree, true)
-		recs = wf.Recommend(asm)
-		duration = uint64(time.Since(start).Nanoseconds() / 1000000)
-
-		// For every left out property, check if it mentioned in the recommendations.
-		for _, lop := range leftOutProps { // lop => left out property
-
-			isIncluded := false
-			for i, r := range recs {
-				if r.Property == lop { // found item to recover
-					//for i > 0 && recs[i-1].Probability == r.Probability {
-					//	i--
-					//}
-					results <- evalResult{groupBy, uint32(i) + 1, duration, true, uint16(len(recs))}
-					isIncluded = true
-					break
-				}
-			}
-
-			// If the left out property was not found in the recommendations, generate an
-			// evalResult that punishes the statistic.
-			if !isIncluded {
-				results <- evalResult{groupBy, 10000, duration, false, uint16(len(recs))}
-			}
-		}
-	}
-
-	// handleTakeButType is a handler method that, upon receiving a subject summary,
-	// will call the evaluator with all type properties as reduced properties and all
-	// others as left out properties.
-	handlerTakeButType := func(summary *schematree.SubjectSummary) {
-
-		// Count the number of types and non-types. This is an optimization to speed up
-		// the subset generation.
-		countTypes := 0
-		for property := range summary.Properties {
-			if property.IsType() {
-				countTypes += 1
-			}
-		}
-
-		// Create and fill both subsets
-		reducedProps := make(schematree.IList, 0, countTypes)
-		leftOutProps := make(schematree.IList, 0, len(summary.Properties)-countTypes)
-		for property := range summary.Properties {
-			if property.IsType() {
-				reducedProps = append(reducedProps, property)
-			} else {
-				leftOutProps = append(leftOutProps, property)
-			}
-		}
-
-		// evalResults will be grouped by the setSize used to generate the recommendations.
-		evaluate(reducedProps, leftOutProps, uint16(countTypes))
-
-		// Another possible method would be to group by subject. This method has been done in
-		// the past by having a shared counter.
-		//     mutex.Lock()
-		//     roundID++
-		//     localRoundID := roundID // important that this copies by value
-		//     mutex.Unlock()
-		//     evaluate(reducedProps, leftOutProps, localRoundID)
-	}
-
-	// handlerTake1N is a handler method that, upon receiving a subject summary,
-	// it will use leave-one-out (or jackknife resampling) to generate and evalResults
-	// for every property that is left out.
-	handlerTake1N := func(s *schematree.SubjectSummary) {
-		properties := make(schematree.IList, 0, len(s.Properties))
-		for p := range s.Properties {
-			properties = append(properties, p)
-		}
-		properties.Sort()
-
-		if len(properties) == 0 {
-			return
-		}
-
-		// take out one property from the list at a time and determine in which position it will be recommended again
-		reducedEntitySet := make(schematree.IList, len(properties)-1, len(properties)-1)
-		leftOut := make(schematree.IList, 1, 1)
-		copy(reducedEntitySet, properties[1:])
-		for i := range reducedEntitySet {
-			if !*typed || properties[i].IsProp() { // Only evaluate if the leftout is a property and not a type
-				leftOut[0] = properties[i]
-				evaluate(reducedEntitySet, leftOut, uint16(len(reducedEntitySet)))
-			}
-			reducedEntitySet[i] = properties[i]
-		}
-		if !*typed || properties[len(properties)-1].IsProp() {
-			leftOut[0] = properties[len(properties)-1]
-			evaluate(reducedEntitySet, leftOut, uint16(len(reducedEntitySet)))
-		}
-	}
-
+	// Start a parellel thread to process and results that are received from the handlers.
 	go func() {
-		wg.Add(1)
-		for res := range results {
-			stats[0] = append(stats[0], res.position)
-			stats[res.setSize] = append(stats[res.setSize], res.position)
-			durations[0] = append(durations[0], res.duration)
-			durations[res.setSize] = append(durations[res.setSize], res.duration)
-			hitRates[0] = append(hitRates[0], res.hit)
-			hitRates[res.setSize] = append(hitRates[res.setSize], res.hit)
-			recommendationCounts[0] = append(recommendationCounts[0], res.recommendationCount)
-			recommendationCounts[res.setSize] = append(recommendationCounts[res.setSize], res.recommendationCount)
+		resultWaitGroup.Add(1)
+		//var roundID uint16
+		for res := range resultQueue {
+			//roundID++
+			//res.group = roundID
+			resultList = append(resultList, res)
 		}
-		wg.Done()
+		resultWaitGroup.Done()
 	}()
 
-	if evalType == "handlerTake1N" {
-		//take 1 N
-		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTake1N, 0, *typed)
-	} else if evalType == "handlerTakeButType" {
-		//take all but types
-		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTakeButType, 0, *typed)
+	// Depending on the evaluation method, we will use a different handler
+	var handler handlerFunc
+	if evalMethod == "handlerTake1N" { // take one out
+		handler = handlerTake1N
+	} else if evalMethod == "handlerTakeButType" { // take all but types
+		handler = handlerTakeButType
+	} else if evalMethod == "historicTakeButType" { // original workings of take all but types
+		handler = buildHistoricHandlerTakeButType()
+	} else {
+		panic("No suitable handler has been selected.")
 	}
 
-	close(results)
-	wg.Wait()
+	// We also construct the method that will evaluate a pair of property sets.
+	evaluator := func(reduced schematree.IList, leftout schematree.IList) *evalResult {
+		return evaluatePair(tree, workflow, reduced, leftout)
+	}
 
-	return makeStatistics(stats, durations, hitRates, recommendationCounts)
+	// Build the complete callback function for the subject summary reader.
+	// Given a SubjectSummary, we use the handlers to split it into reduced and leftout set.
+	// Then we evaluate that pair of property sets. At last, we deliver the result to our
+	// resultQueue that will aggregate all results (from multiple sources) in a single list.
+	subjectCallback := func(summary *schematree.SubjectSummary) {
+		var results []*evalResult = handler(summary, evaluator)
+		for _, res := range results {
+			resultQueue <- *res // send structs to channel (not pointers)
+		}
+	}
+
+	// Start the subject summary reader and collect all results into resultList, using the
+	// process that is managing the resultQueue.
+	schematree.SubjectSummaryReader(filePath, tree.PropMap, subjectCallback, 0, isTyped)
+	close(resultQueue)     // mark the end of results channel
+	resultWaitGroup.Wait() // wait until the parallel process that manages the queue is terminated
+
+	return resultList
 }
 
-func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hitRates map[uint16][]bool, recommendationCounts map[uint16][]uint16) (statistics []evalSummary) {
+// makeStatics receive a list of evaluation results and makes a summary of them.
+func makeStatistics(results []evalResult) (statistics []evalSummary) {
+
+	// Legacy step to guarantee that this function works the same.
+	// Before, these variables were given by arguments but now the makeStatistic only receives the
+	// array of evalResults and the variables have to be calculated here.
+	//
+	// In order to implement new features this method should be replaced with other code.
+	durations := make(map[uint16][]int64)
+	stats := make(map[uint16][]uint32)
+	hitRates := make(map[uint16][]bool)
+	recommendationCounts := make(map[uint16][]uint32)
+	for _, res := range results {
+
+		// Basic grouping mechanism just for compatibility. Will use roundID is provided, else setSize.
+		var group uint16
+		if res.group != 0 {
+			group = res.group
+		} else {
+			group = res.setSize
+		}
+
+		stats[0] = append(stats[0], res.rank)
+		stats[group] = append(stats[group], res.rank)
+		durations[0] = append(durations[0], res.duration)
+		durations[group] = append(durations[group], res.duration)
+		hitRates[0] = append(hitRates[0], uint32(res.numLeftOut) == res.numTP)
+		hitRates[group] = append(hitRates[group], uint32(res.numLeftOut) == res.numTP)
+		recommendationCounts[0] = append(recommendationCounts[0], res.numTP+res.numFP)
+		recommendationCounts[group] = append(recommendationCounts[group], res.numTP+res.numFP)
+	}
+
 	// compute statistics
 	duration := make(map[uint16]float64)
 	recommendationCount := make(map[uint16]float64)
@@ -437,13 +355,24 @@ func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hi
 }
 
 func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
-	output := fmt.Sprintf("%8s, %8s, %10s, %9s, %8s, %8s, %8s, %10s, %11s, %8s, %8s, %8s, %13s, %19s\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "PrecisionAt10", "RecommendationCount")
+	f, _ := os.Create(filename + ".csv")
+	f.WriteString(fmt.Sprintf(
+		"%8s, %8s, %10s, %9s, %8s, %8s, %8s, %10s, %11s, %8s, %8s, %8s, %13s, %19s\n",
+		"set", "median", "mean", "stddev",
+		"top1", "top5", "top10", "sampleSize",
+		"#subjects", "Duration", "HitRate", "Precision",
+		"PrecisionAt10", "RecommendationCount",
+	))
 
 	for _, stat := range statistics {
-		output += fmt.Sprintf("%8v, %8.1f, %10.4f, %9.4f, %8.4f, %8.4f, %8.4f, %10v, %11.4f, %8.4f, %8.4f, %8.4f, %13.4f, %19.4f\n", stat.setSize, stat.median, stat.mean, stat.stddev, stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
+		f.WriteString(fmt.Sprintf(
+			"%8v, %8.1f, %10.4f, %9.4f, %8.4f, %8.4f, %8.4f, %10v, %11.4f, %8.4f, %8.4f, %8.4f, %13.4f, %19.4f\n",
+			stat.setSize, stat.median, stat.mean, stat.stddev,
+			stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize,
+			stat.subjectCount, float64(stat.duration)/1000000, stat.hitRate*100.0, stat.precision,
+			stat.precisionAt10, stat.recommendationCount,
+		))
 	}
-	f, _ := os.Create(filename + ".csv")
-	f.WriteString(output)
 	f.Close()
 	return
 }
