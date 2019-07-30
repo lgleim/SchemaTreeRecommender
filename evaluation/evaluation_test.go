@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"recommender/configuration"
 	"recommender/schematree"
 	"recommender/strategy"
@@ -9,17 +10,16 @@ import (
 
 func TestEval(t *testing.T) {
 	//trainingData := "../testdata/10M.nt.gz"
-	testData := "../testdata/10M.nt_1in2_test.gz"
+	testData := "../testdata/10M.nt_1in2_test"
 
-	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.bin")
-	f := false
-	stats, resources, hitRate := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &f)
-	statistics := makeStatistics(stats, resources, hitRate)
+	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.typed.bin")
+	statistics := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &schema.Typed, "handlerTakeButType")
 
-	for _, v := range statistics {
-		if v.top10 < 85 {
-			//Not given anymore since results became much worse
-			//t.Fatalf("top10 is at %v", v.top10)
+	fmt.Printf("\n %+v", statistics[0])
+
+	for i, v := range statistics {
+		if i < 15 {
+			fmt.Printf("\n %+v", v.precisionAt10)
 		}
 	}
 }

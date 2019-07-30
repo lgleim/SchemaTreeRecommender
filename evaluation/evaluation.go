@@ -1,10 +1,8 @@
 package main
 
 import (
-	"encoding/gob"
 	"flag"
 	"fmt"
-	"image/color"
 	"log"
 	"math"
 	"os"
@@ -16,14 +14,35 @@ import (
 	"runtime/pprof"
 	"runtime/trace"
 	"sort"
-	"strconv"
 	"sync"
 	"time"
-
-	"gonum.org/v1/plot"
-	"gonum.org/v1/plot/plotter"
-	"gonum.org/v1/plot/vg"
 )
+
+type evalResult struct {
+	setSize             uint16
+	position            uint32
+	duration            uint64
+	hit                 bool
+	recommendationCount uint16
+}
+
+type evalSummary struct {
+	setSize             int
+	median              float64
+	mean                float64
+	stddev              float64
+	top1                float64
+	top5                float64
+	top10               float64
+	sampleSize          int
+	subjectCount        float64
+	worst5average       float64
+	duration            float64
+	hitRate             float64
+	precision           float64
+	precisionAt10       float64
+	recommendationCount float64
+}
 
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
@@ -39,6 +58,9 @@ func main() {
 	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
+	handlerType := flag.String("handler", "handlerTake1N", "Choose the handler handlerTakeButType or handlerTake1N ")
+
+	var statistics []evalSummary
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -82,8 +104,6 @@ func main() {
 		defer trace.Stop()
 	}
 
-	stats := make(map[uint16][]uint32)
-	hits := make(map[uint16][]bool)
 	if *createConfigs {
 		if *createConfigsCreater == "" {
 			log.Fatalln("A Create Config File must be provided in ./configs!")
@@ -97,7 +117,7 @@ func main() {
 			log.Fatalln("A model must be provided for Batch Test!")
 			return
 		}
-		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities)
+		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities, *handlerType)
 		if err != nil {
 			log.Fatalln("Batch Config Failed", err)
 			return
@@ -136,185 +156,188 @@ func main() {
 			// if no workflow config given then run standard recommender
 			wf = strategy.MakePresetWorkflow("direct", tree)
 		}
-		stats, _, hits = evaluation(tree, testFile, wf, typedEntities)
 
-		f, _ := os.Create(*testFile + ".eval")
-		e := gob.NewEncoder(f)
-		// e.Encode(summary)
-		e.Encode(stats)
-		f.Close()
+		statistics = evaluation(tree, testFile, wf, typedEntities, *handlerType)
+		writeStatisticsToFile(*testFile, statistics)
+		fmt.Printf("%v+", statistics[0])
 	}
-	writeStatisticsToFile(stats, hits, *testFile)
-
+	//so something with statistics
+	//fmt.Printf("%v+", statistics[0])
 }
 
-type evalResult struct {
-	setSize   uint16
-	position  uint32
-	resources *evalResources
-	hit       bool
-}
-type evalResources struct {
-	duration         int64
-	memoryAllocation uint64
-}
-
-func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool) (stats map[uint16][]uint32, resources map[uint16][]*evalResources, hitRates map[uint16][]bool) {
-	resources = make(map[uint16][]*evalResources)
-	stats = make(map[uint16][]uint32)
-	hitRates = make(map[uint16][]bool)
-
-	// memoize empty set recommendations
-	setSup := float64(tree.Root.Support) // empty set occured in all transactions
-	emptyRecs := make([]schematree.RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
-	for _, prop := range tree.PropMap {
-		emptyRecs[int(prop.SortOrder)] = schematree.RankedPropertyCandidate{
-			Property:    prop,
-			Probability: float64(prop.TotalCount) / setSup,
-		}
-	}
+func evaluation(tree *schematree.SchemaTree, testFile *string, wf *strategy.Workflow, typed *bool, evalType string) []evalSummary {
+	durations := make(map[uint16][]uint64)
+	stats := make(map[uint16][]uint32)
+	hitRates := make(map[uint16][]bool)
+	recommendationCounts := make(map[uint16][]uint16)
 
 	var wg sync.WaitGroup
 	results := make(chan evalResult, 1000) // collect eval results via channel
 
-	// evaluate the rank the recommender assigns the left out property
-	evaluate := func(properties schematree.IList, leftOut *schematree.IItem) {
-		var duration int64
+	// used in the past for defined an incrementing counter used by all evaluate threads
+	//     roundID := uint16(1)
+	//     var mutex = &sync.Mutex{}
+
+	// evaluate will take a list of reduced properties, run the recommender workflow with those reduced
+	// properties, and generate evaluation result entries by using the recently adquired recommendations
+	// and the leftout properties.
+	// The aim is to evaluate how well the leftout properties appear in the recommendations that are
+	// generated using the properties.
+	evaluate := func(reducedProps schematree.IList, leftOutProps schematree.IList, groupBy uint16) {
+		var duration uint64
 		var recs []schematree.RankedPropertyCandidate
-		var m runtime.MemStats
-		var resource evalResources
-		if len(properties) == 0 {
-			recs = emptyRecs
-		} else {
-			start := time.Now()
-			asm := assessment.NewInstance(properties, tree, true)
-			recs = wf.Recommend(asm)
-			duration = time.Since(start).Nanoseconds()
-			runtime.ReadMemStats(&m)
-			resource = evalResources{duration, m.Alloc / 1024 / 1024}
+
+		// Evaluator will not generate stats if no properties exist to make a recommendation.
+		if len(reducedProps) == 0 {
+			return
 		}
 
-		included := false
-		for i, r := range recs {
-			if r.Property == leftOut { // found item to recover
-				for i > 0 && recs[i-1].Probability == r.Probability {
-					i--
+		// Run the recommender with the input properties.
+		start := time.Now()
+		asm := assessment.NewInstance(reducedProps, tree, true)
+		recs = wf.Recommend(asm)
+		duration = uint64(time.Since(start).Nanoseconds() / 1000000)
+
+		// For every left out property, check if it mentioned in the recommendations.
+		for _, lop := range leftOutProps { // lop => left out property
+
+			isIncluded := false
+			for i, r := range recs {
+				if r.Property == lop { // found item to recover
+					//for i > 0 && recs[i-1].Probability == r.Probability {
+					//	i--
+					//}
+					results <- evalResult{groupBy, uint32(i) + 1, duration, true, uint16(len(recs))}
+					isIncluded = true
+					break
 				}
-				results <- evalResult{uint16(len(properties)), uint32(i), &resource, true}
-				included = true
-				break
 			}
-		}
-		//punish if not in recommendation rec included
-		if !included {
-			results <- evalResult{uint16(len(properties)), 500, &resource, false}
+
+			// If the left out property was not found in the recommendations, generate an
+			// evalResult that punishes the statistic.
+			if !isIncluded {
+				results <- evalResult{groupBy, 10000, duration, false, uint16(len(recs))}
+			}
 		}
 	}
 
-	handler := func(s *schematree.SubjectSummary) {
+	// handleTakeButType is a handler method that, upon receiving a subject summary,
+	// will call the evaluator with all type properties as reduced properties and all
+	// others as left out properties.
+	handlerTakeButType := func(summary *schematree.SubjectSummary) {
+
+		// Count the number of types and non-types. This is an optimization to speed up
+		// the subset generation.
+		countTypes := 0
+		for property := range summary.Properties {
+			if property.IsType() {
+				countTypes += 1
+			}
+		}
+
+		// Create and fill both subsets
+		reducedProps := make(schematree.IList, 0, countTypes)
+		leftOutProps := make(schematree.IList, 0, len(summary.Properties)-countTypes)
+		for property := range summary.Properties {
+			if property.IsType() {
+				reducedProps = append(reducedProps, property)
+			} else {
+				leftOutProps = append(leftOutProps, property)
+			}
+		}
+
+		// evalResults will be grouped by the setSize used to generate the recommendations.
+		evaluate(reducedProps, leftOutProps, uint16(countTypes))
+
+		// Another possible method would be to group by subject. This method has been done in
+		// the past by having a shared counter.
+		//     mutex.Lock()
+		//     roundID++
+		//     localRoundID := roundID // important that this copies by value
+		//     mutex.Unlock()
+		//     evaluate(reducedProps, leftOutProps, localRoundID)
+	}
+
+	// handlerTake1N is a handler method that, upon receiving a subject summary,
+	// it will use leave-one-out (or jackknife resampling) to generate and evalResults
+	// for every property that is left out.
+	handlerTake1N := func(s *schematree.SubjectSummary) {
 		properties := make(schematree.IList, 0, len(s.Properties))
 		for p := range s.Properties {
 			properties = append(properties, p)
 		}
 		properties.Sort()
 
-		// take out one property from the list at a time and determine in which position it will be recommended again
-		tmp := make(schematree.IList, len(properties)-1, len(properties)-1)
-		copy(tmp, properties[1:])
-		for i := range tmp {
-			evaluate(tmp, properties[i])
-			tmp[i] = properties[i]
+		if len(properties) == 0 {
+			return
 		}
-		evaluate(tmp, properties[len(properties)-1])
-	}
-
-	handlerTyped := func(s *schematree.SubjectSummary) {
-		properties := make(schematree.IList, 0, len(s.Properties))
-		for p := range s.Properties {
-			properties = append(properties, p)
-		}
-		properties.Sort()
 
 		// take out one property from the list at a time and determine in which position it will be recommended again
-		tmp := make(schematree.IList, len(properties)-1, len(properties)-1)
-		copy(tmp, properties[1:])
-		for i := range tmp {
-			if properties[i].IsProp() { // Only evaluate if the leftout is a property and not a type
-				evaluate(tmp, properties[i])
+		reducedEntitySet := make(schematree.IList, len(properties)-1, len(properties)-1)
+		leftOut := make(schematree.IList, 1, 1)
+		copy(reducedEntitySet, properties[1:])
+		for i := range reducedEntitySet {
+			if !*typed || properties[i].IsProp() { // Only evaluate if the leftout is a property and not a type
+				leftOut[0] = properties[i]
+				evaluate(reducedEntitySet, leftOut, uint16(len(reducedEntitySet)))
 			}
-			tmp[i] = properties[i]
+			reducedEntitySet[i] = properties[i]
 		}
-		if properties[len(properties)-1].IsProp() {
-			evaluate(tmp, properties[len(properties)-1])
+		if !*typed || properties[len(properties)-1].IsProp() {
+			leftOut[0] = properties[len(properties)-1]
+			evaluate(reducedEntitySet, leftOut, uint16(len(reducedEntitySet)))
 		}
 	}
 
 	go func() {
 		wg.Add(1)
 		for res := range results {
+			stats[0] = append(stats[0], res.position)
 			stats[res.setSize] = append(stats[res.setSize], res.position)
-			resources[res.setSize] = append(resources[res.setSize], res.resources)
+			durations[0] = append(durations[0], res.duration)
+			durations[res.setSize] = append(durations[res.setSize], res.duration)
+			hitRates[0] = append(hitRates[0], res.hit)
 			hitRates[res.setSize] = append(hitRates[res.setSize], res.hit)
+			recommendationCounts[0] = append(recommendationCounts[0], res.recommendationCount)
+			recommendationCounts[res.setSize] = append(recommendationCounts[res.setSize], res.recommendationCount)
 		}
 		wg.Done()
 	}()
 
-	if !*typed {
-		// not typed
-		//fmt.Printf("No Types")
-		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
-		close(results)
-		wg.Wait()
-	} else {
-		// else mit types
-		//fmt.Printf("Types")
-		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTyped, 0, true)
-		close(results)
-		wg.Wait()
+	if evalType == "handlerTake1N" {
+		//take 1 N
+		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTake1N, 0, *typed)
+	} else if evalType == "handlerTakeButType" {
+		//take all but types
+		schematree.SubjectSummaryReader(*testFile, tree.PropMap, handlerTakeButType, 0, *typed)
 	}
 
-	var length uint64
-	for _, rank_list := range stats {
-		length += uint64(len(rank_list))
-	}
+	close(results)
+	wg.Wait()
 
-	total := make([]uint32, 0, length)
-	total_res := make([]*evalResources, 0, length)
-	total_hits := make([]bool, 0, length)
-
-	for _, rank_list := range resources {
-		total_res = append(total_res, rank_list...)
-	}
-
-	for _, rank_list := range stats {
-		total = append(total, rank_list...)
-	}
-
-	for _, rank_list := range hitRates {
-		total_hits = append(total_hits, rank_list...)
-	}
-
-	stats[0] = total
-	resources[0] = total_res
-	hitRates[0] = total_hits
-
-	return stats, resources, hitRates
+	return makeStatistics(stats, durations, hitRates, recommendationCounts)
 }
 
-func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResources, hitRates map[uint16][]bool) (statistics []evalSummary) {
+func makeStatistics(stats map[uint16][]uint32, durations map[uint16][]uint64, hitRates map[uint16][]bool, recommendationCounts map[uint16][]uint16) (statistics []evalSummary) {
 	// compute statistics
 	duration := make(map[uint16]float64)
-	memoryAllocation := make(map[uint16]float64)
-	var averageSize float64
-	for k, v := range resources {
+	recommendationCount := make(map[uint16]float64)
+
+	for k, v := range durations {
 		for _, res := range v {
-			duration[k] = duration[k] + float64(res.duration)
-			memoryAllocation[k] = memoryAllocation[k] + float64(res.memoryAllocation)
+			duration[k] = duration[k] + float64(res)
 		}
-	}
-	for k, v := range resources {
 		duration[k] = duration[k] / float64(len(v))
-		memoryAllocation[k] = memoryAllocation[k] / float64(len(v))
+	}
+
+	for k, v := range recommendationCounts {
+		if k > 0 {
+			for _, res := range v {
+				recommendationCount[k] = recommendationCount[k] + float64(res)
+			}
+			recommendationCount[k] = recommendationCount[k] / float64(len(v))
+			recommendationCount[0] = recommendationCount[0] + recommendationCount[k]
+		}
 	}
 
 	statistics = make([]evalSummary, len(stats))
@@ -323,6 +346,7 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 		setLens = append(setLens, int(setLen))
 	}
 
+	var averageSize float64
 	for _, value := range setLens {
 		averageSize += float64(value)
 	}
@@ -333,6 +357,8 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 
 		v := stats[uint16(setLen)]
 		h := hitRates[uint16(setLen)]
+		r := recommendationCount[uint16(setLen)]
+		d := duration[uint16(setLen)]
 
 		if len(v) == 0 {
 			continue
@@ -340,19 +366,39 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
 
 		var sum uint64
-		var mean, meanSquare, median, variance, top1, top5, top10, subjects, worst5average, hitRate float64
-		l := float64(len(v))
+		var mean, meanSquare, median, variance, top1, top5, top10, precisionAt10, subjects, worst5average, hitRate, precision float64
 
-		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / float64(len(v))
-		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 5 })) / float64(len(v))
-		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 10 })) / float64(len(v))
+		l := float64(len(v))
+		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 1 })) / l
+		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 5 })) / l
+		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / l
+
+		hitCount := 0
+		for _, hit := range h {
+			if hit {
+				hitCount++
+			}
+		}
+
+		hitRate = float64(hitCount) / float64(len(h))
+
+		if r > 0 {
+			precision = float64(hitCount) / r
+		} else {
+			precision = 1
+		}
+
+		if setLen == 0 {
+			precisionAt10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / 10 / float64(len(setLens))
+		} else {
+			precisionAt10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / math.Min(10, float64(len(v)))
+		}
 
 		if len(v) == 1 {
 			mean = float64(v[0])
 			median = mean
 			variance = 0
 			worst5average = mean
-			hitRate = 0
 
 		} else {
 			if len(v)%2 != 0 {
@@ -372,21 +418,11 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 			if len(worst5) == 0 {
 				worst5 = append(worst5, 0)
 			}
-
 			sum = 0
 			for _, value := range worst5 {
 				sum += uint64(value)
 			}
 			worst5average = float64(sum) / float64(len(worst5))
-
-			sum = 0
-			for _, x := range h {
-				if x {
-					sum++
-				}
-			}
-			hitRate = float64(sum) / float64(len(h))
-
 		}
 
 		if setLen == 0 {
@@ -394,310 +430,20 @@ func makeStatistics(stats map[uint16][]uint32, resources map[uint16][]*evalResou
 		} else {
 			subjects = float64(len(v)) / float64(setLen)
 		}
-		statistics[i] = evalSummary{setLen, median + 1, mean + 1, math.Sqrt(variance), top1 * 100, top5 * 100, top10 * 100, len(v), subjects, worst5average + 1, duration[uint16(setLen)], memoryAllocation[uint16(setLen)], hitRate}
+
+		statistics[i] = evalSummary{setLen, median, mean, math.Sqrt(variance), top1, top5, top10, len(v), subjects, worst5average, d, hitRate, precision, precisionAt10, r}
 	}
 	return
 }
 
-type evalSummary struct {
-	setSize          int
-	median           float64
-	mean             float64
-	variance         float64
-	top1             float64
-	top5             float64
-	top10            float64
-	sampleSize       int
-	subjectCount     float64
-	worst5average    float64
-	duration         float64
-	memoryAllocation float64
-	hitRate          float64
-}
+func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
+	output := fmt.Sprintf("%8s, %8s, %10s, %9s, %8s, %8s, %8s, %10s, %11s, %8s, %8s, %8s, %13s, %19s\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "Duration", "HitRate", "Precision", "PrecisionAt10", "RecommendationCount")
 
-func writeStatisticsToFile(stats map[uint16][]uint32, hitRates map[uint16][]bool, fileName string) (output string) {
-	// compute statistics
-	output = fmt.Sprintf("%8v, %8v, %8v, %12v, %8v, %8v, %8v, %10v, %10v, %8v\n", "set", "median", "mean", "stddev", "top1", "top5", "top10", "sampleSize", "#subjects", "HitRate")
-	setLens := make([]int, 0, len(stats))
-	for setLen := range stats {
-		setLens = append(setLens, int(setLen))
+	for _, stat := range statistics {
+		output += fmt.Sprintf("%8v, %8.1f, %10.4f, %9.4f, %8.4f, %8.4f, %8.4f, %10v, %11.4f, %8.4f, %8.4f, %8.4f, %13.4f, %19.4f\n", stat.setSize, stat.median, stat.mean, stat.stddev, stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize, stat.subjectCount, stat.duration, stat.hitRate*100.0, stat.precision, stat.precisionAt10, stat.recommendationCount)
 	}
-	sort.Ints(setLens)
-	for _, setLen := range setLens {
-		v := stats[uint16(setLen)]
-		h := hitRates[uint16(setLen)]
-		if len(v) == 0 {
-			continue
-		}
-		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
-
-		var sum uint64
-		var mean, meanSquare, median, variance, top1, top5, top10, hitRate float64
-		l := float64(len(v))
-
-		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 1 })) / float64(len(v))
-		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 5 })) / float64(len(v))
-		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] >= 10 })) / float64(len(v))
-
-		if len(v) == 1 {
-			mean = float64(v[0])
-			median = mean
-			variance = 0
-			hitRate = 0
-		} else {
-			if len(v)%2 != 0 {
-				median = float64(v[len(v)/2])
-			} else {
-				median = (float64(v[len(v)/2-1]) + float64(v[len(v)/2])) / 2.0
-			}
-
-			for _, x := range v {
-				sum += uint64(x)
-				meanSquare += float64(x) * float64(x) / l
-			}
-			mean = float64(sum) / l
-			variance = math.Abs(meanSquare - (mean * mean))
-
-			sum = 0
-			for _, x := range h {
-				if x {
-					sum++
-				}
-			}
-			hitRate = float64(sum) / float64(len(h))
-
-		}
-
-		output += fmt.Sprintf("%8v, %8v, %8.4f, %12.4f, %8.4f, %8.4f, %8.4f, %10v, %10v, %8.8f\n", setLen, median+1, mean+1, math.Sqrt(variance), top1*100, top5*100, top10*100, len(v), len(v)/(setLen+1), hitRate*100.0)
-	}
-	f, _ := os.Create(fileName + ".csv")
+	f, _ := os.Create(filename + ".csv")
 	f.WriteString(output)
 	f.Close()
-
-	// Plot experiment
-	p, _ := plot.New()
-	p.Title.Text = "Distribution of recommendation position of correct element for given set sizes"
-	p.X.Label.Text = "Percentile of recommendations"
-	p.Y.Label.Text = "normalized recommendation rank"
-	// Draw a grid behind the data
-	p.Add(plotter.NewGrid())
-
-	p.X.Tick.Marker = ticks{}
-	p.Y.Tick.Marker = p.X.Tick.Marker
-
-	// Draw legend on the top left
-	p.Legend.Left = true
-	p.Legend.Top = true
-	p.Legend.XOffs = 0.7 * vg.Inch
-	p.Legend.YOffs = -0.2 * vg.Inch
-
-	l := len(stats)
-	for i, setLen := range setLens {
-		v := stats[uint16(setLen)]
-		// plotutil.AddLines(p, strconv.Itoa(setLen))
-		line, err := plotter.NewLine(toPoints(v))
-		if err != nil {
-			fmt.Println("Error:", err)
-			continue
-		}
-		line.LineStyle.Color = color.RGBA{0, uint8(i * 255 / l), 0, 255}
-		p.Add(line)
-		p.Legend.Add(strconv.Itoa(setLen), line)
-	}
-	// Save the plot to a PNG file.
-	if err := p.Save(24*vg.Inch, 12*vg.Inch, fileName+".svg"); err != nil {
-		panic(err)
-	}
 	return
-}
-
-// toPoints returns corresponding points on 0-100 range in XY dimensions
-func toPoints(v []uint32) (pts plotter.XYs) {
-	if len(v) < 2 {
-		log.Fatalln("v has to few samples", v)
-	}
-	pts = make(plotter.XYs, len(v), len(v))
-	l := float64(len(v)-1) / 100
-	maxY := float64(v[len(v)-1]) / 100
-	if maxY == 0 {
-		maxY = 1
-	}
-	for i, y := range v {
-		pts[i].X = float64(i) / l
-		pts[i].Y = float64(y) / maxY
-	}
-
-	// downsample to a maximum of 100 points
-	pts = LTTB(pts, 100)
-	return
-}
-
-type ticks struct{}
-
-// Ticks returns Ticks in the specified range.
-func (ticks) Ticks(min, max float64) []plot.Tick {
-	if max <= min {
-		panic("illegal range")
-	}
-
-	const suggestedTicks = 11
-
-	labels, step, q, mag := talbotLinHanrahan(min, max, suggestedTicks, withinData, nil, nil, nil)
-	majorDelta := step * math.Pow10(mag)
-	if q == 0 {
-		// Simple fall back was chosen, so
-		// majorDelta is the label distance.
-		majorDelta = labels[1] - labels[0]
-	}
-
-	// Choose a reasonable, but ad
-	// hoc formatting for labels.
-	fc := byte('f')
-	var off int
-	if mag < -1 || 6 < mag {
-		off = 1
-		fc = 'g'
-	}
-	if math.Trunc(q) != q {
-		off += 2
-	}
-	prec := minInt(6, maxInt(off, -mag))
-	var ticks []plot.Tick
-	for _, v := range labels {
-		ticks = append(ticks, plot.Tick{Value: v, Label: strconv.FormatFloat(v, fc, prec, 64)})
-	}
-
-	var minorDelta float64
-	// See talbotLinHanrahan for the values used here.
-	switch step {
-	case 1, 2.5:
-		minorDelta = majorDelta / 5
-	case 2, 3, 4, 5:
-		minorDelta = majorDelta / step
-	default:
-		if majorDelta/2 < dlamchP {
-			return ticks
-		}
-		minorDelta = majorDelta / 2
-	}
-
-	// Find the first minor tick not greater
-	// than the lowest data value.
-	var i float64
-	for labels[0]+(i-1)*minorDelta > min {
-		i--
-	}
-	// Add ticks at minorDelta intervals when
-	// they are not within minorDelta/2 of a
-	// labelled tick.
-	for {
-		val := labels[0] + i*minorDelta
-		if val > max {
-			break
-		}
-		found := false
-		for _, t := range ticks {
-			if math.Abs(t.Value-val) < minorDelta/2 {
-				found = true
-			}
-		}
-		if !found {
-			ticks = append(ticks, plot.Tick{Value: val})
-		}
-		i++
-	}
-
-	return ticks
-}
-
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-func maxInt(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// LTTB down-samples the data to contain only threshold number of points that
-// have the same visual shape as the original data
-// adapted from https://github.com/dgryski/go-lttb/blob/master/lttb.go
-func LTTB(data plotter.XYs, threshold int) plotter.XYs {
-
-	if threshold >= len(data) || threshold == 0 {
-		return data // Nothing to do
-	}
-
-	sampled := make(plotter.XYs, 0, threshold)
-
-	// Bucket size. Leave room for start and end data points
-	every := float64(len(data)-2) / float64(threshold-2)
-
-	sampled = append(sampled, data[0]) // Always add the first point
-
-	bucketStart := 1
-	bucketCenter := int(math.Floor(every)) + 1
-
-	var a int
-
-	for i := 0; i < threshold-2; i++ {
-
-		bucketEnd := int(math.Floor(float64(i+2)*every)) + 1
-
-		// Calculate point average for next bucket (containing c)
-		avgRangeStart := bucketCenter
-		avgRangeEnd := bucketEnd
-
-		if avgRangeEnd >= len(data) {
-			avgRangeEnd = len(data)
-		}
-
-		avgRangeLength := float64(avgRangeEnd - avgRangeStart)
-
-		var avgX, avgY float64
-		for ; avgRangeStart < avgRangeEnd; avgRangeStart++ {
-			avgX += data[avgRangeStart].X
-			avgY += data[avgRangeStart].Y
-		}
-		avgX /= avgRangeLength
-		avgY /= avgRangeLength
-
-		// Get the range for this bucket
-		rangeOffs := bucketStart
-		rangeTo := bucketCenter
-
-		// Point a
-		pointAX := data[a].X
-		pointAY := data[a].Y
-
-		maxArea := -1.0
-
-		var nextA int
-		for ; rangeOffs < rangeTo; rangeOffs++ {
-			// Calculate triangle area over three buckets
-			area := (pointAX-avgX)*(data[rangeOffs].Y-pointAY) - (pointAX-data[rangeOffs].X)*(avgY-pointAY)
-			// We only care about the relative area here.
-			// Calling math.Abs() is slower than squaring
-			area *= area
-			if area > maxArea {
-				maxArea = area
-				nextA = rangeOffs // Next a is this b
-			}
-		}
-
-		sampled = append(sampled, data[nextA]) // Pick this point from the bucket
-		a = nextA                              // This a is the next a (chosen b)
-
-		bucketStart = bucketCenter
-		bucketCenter = bucketEnd
-	}
-
-	sampled = append(sampled, data[len(data)-1]) // Always add last
-
-	return sampled
 }

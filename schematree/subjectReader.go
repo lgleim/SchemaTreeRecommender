@@ -42,13 +42,15 @@ func (subj *SubjectSummary) String() string {
 	return fmt.Sprintf("{\n  types:      [ %v ]\n  properties: [ %v ]\n}", 0, len(subj.Properties)) //TODO count types
 }
 
-// Reads a RDF Dataset from disk (Subject-gouped NTriples) and emits per-subject summaries
+// SubjectSummaryReader reads a RDF Dataset from disk (in N-Triples format) which is expected to be
+// grouped by subjects. For each subject group, the method will build a SubjectSummary structure and
+// send it to a handler function.
 func SubjectSummaryReader(
-	fileName string,
-	pMap propMap,
-	handler func(s *SubjectSummary),
-	firstN uint64,
-	types bool,
+	fileName string, // path to the file that should be parsed
+	pMap propMap, // maps of properties that the schematree recognizes
+	handler func(s *SubjectSummary), // handler function that gets executed after a SubjectSummary is completed
+	firstN uint64, // stop after N subjects are read; setting this to zero will read all entries
+	types bool, // true if the reader should identify type entries and convert them to TypeProperties.
 ) (subjectCount uint64) {
 	// IO setup
 	reader, err := rio.UniversalReader(fileName)
