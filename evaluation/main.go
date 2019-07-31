@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"recommender/configuration"
+	recIO "recommender/io"
 	"recommender/schematree"
 	"recommender/strategy"
 	"runtime"
@@ -27,9 +28,9 @@ func main() {
 	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
-	handlerType := flag.String("handler", "handlerTake1N", "Choose the handler handlerTakeButType or handlerTake1N ")
-	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes or numLeftOut ")
-	showResults := flag.Bool("results", false, "Turn on to print list of all evalResults on screen")
+	handlerType := flag.String("handler", "takeOneButType", "Choose the handler: takeOneButType, takeAllButBest")
+	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes, numLeftOut, numNonTypes")
+	writeResults := flag.Bool("results", false, "Turn on to write an additional CSV file with all evaluation results")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -131,29 +132,25 @@ func main() {
 			wf = strategy.MakePresetWorkflow("direct", tree)
 		}
 
-		fmt.Println("Evaluating the dataset.")
+		fmt.Println("Evaluating the dataset...")
 		datasetResults := evaluateDataset(tree, wf, *typedEntities, *testFile, *handlerType)
 
-		// @DEBUG This will output the list of evalResult. When building statistics use the commented
-		if *showResults {
-			fmt.Printf(
-				"%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s, %s\n",
-				"group", "setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "numTP@L", "duration", "note",
-			)
-			for _, dr := range datasetResults {
-				fmt.Printf(
-					"%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v, %v\n",
-					dr.group, dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.numTPAtL, dr.duration, dr.note,
-				)
-			}
+		// Calculate the base name of the input file to generate CSVs with similar names.
+		testBase := recIO.TrimExtensions(*testFile) + "-" + *handlerType + "-" + *groupBy
+
+		// When results flag is given, will also write a CSV for evalResult array
+		if *writeResults {
+			fmt.Printf("Writing results to CSV file...")
+			writeResultsToFile(testBase+"-results", datasetResults)
+			fmt.Printf(" Complete.\n")
 		}
 
 		fmt.Printf("Aggregating the results...")
 		datasetStatistics := makeStatistics(datasetResults, *groupBy)
 		fmt.Printf(" Complete.\n")
 
-		fmt.Printf("Writing results to CSV file...")
-		writeStatisticsToFile(*testFile, *groupBy, datasetStatistics)
+		fmt.Printf("Writing statistics to CSV file...")
+		writeStatisticsToFile(testBase+"-stats", *groupBy, datasetStatistics)
 		fmt.Printf(" Complete.\n")
 
 		fmt.Printf("%v+\n", datasetStatistics[0])

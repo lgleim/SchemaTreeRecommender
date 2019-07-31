@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"os"
 	"recommender/assessment"
 	"recommender/schematree"
 	"recommender/strategy"
@@ -102,12 +104,13 @@ func evaluatePair(
 	// If not recommendations were found, we add a penalizing number.
 	var rank uint32
 	if numTP == uint32(len(leftoutProps)) {
-		rank = uint32(maxMatchIndex + 1 - len(leftoutProps))
+		rank = uint32(maxMatchIndex + 1 - len(leftoutProps) + 1) // +1 for index, +1 because best is 1
 	} else {
 		// The rank could also be set to = uint32(len(recs) + 1)
 		// That would make it dependent on number of recommendations. Problem is, when the
 		// recommender returns a small number of recommendations, then the rank is small
 		// as well.
+		// Or maybe set it to = uint32(len(tree.propMap) + 1)
 		rank = 10000 // uint32(len(recs) + 1)
 	}
 
@@ -137,7 +140,7 @@ func evaluateDataset(
 	workflow *strategy.Workflow,
 	isTyped bool,
 	filePath string,
-	evalMethod string,
+	handlerName string,
 ) []evalResult {
 
 	// Initialize required variables for managing all the results with multiple threads.
@@ -159,17 +162,13 @@ func evaluateDataset(
 
 	// Depending on the evaluation method, we will use a different handler
 	var handler handlerFunc
-	if evalMethod == "handlerTake1N" { // take one out
-		handler = handlerTake1N
-	} else if evalMethod == "TakeOneButType" { // take one out except type
+	if handlerName == "takeOneButType" { // take one out except type
 		handler = HandlerTakeOneButType
-	} else if evalMethod == "TakeAllButNumTypeBest" { // take all best except number of types
-		handler = HandlerTakeAllButNumTypeBest
-	} else if evalMethod == "handlerTakeButType" { // take all but types
+	} else if handlerName == "takeAllButBest" { // take all best except number of types
+		handler = HandlerTakeAllButBest
+	} else if handlerName == "handlerTakeButType" { // take all but types
 		handler = handlerTakeButType
-	} else if evalMethod == "TakeAllButType" {
-		handler = handlerTakeAllButType
-	} else if evalMethod == "historicTakeButType" { // original workings of take all but types
+	} else if handlerName == "historicTakeButType" { // original workings of take all but types
 		handler = buildHistoricHandlerTakeButType()
 	} else {
 		panic("No suitable handler has been selected.")
@@ -202,4 +201,22 @@ func evaluateDataset(
 	resultWaitGroup.Wait() // wait until the parallel process that manages the queue is terminated
 
 	return resultList
+}
+
+// writeResultsToFile will output the entire evalResult array to a CSV file
+func writeResultsToFile(filename string, results []evalResult) {
+	f, _ := os.Create(filename + ".csv")
+	f.WriteString(fmt.Sprintf(
+		"%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s, %s\n",
+		"setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "numTP@L", "dur(ys)", "note",
+	))
+
+	for _, dr := range results {
+		f.WriteString(fmt.Sprintf(
+			"%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v, %s\n",
+			dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.numTPAtL, dr.duration, dr.note,
+		))
+	}
+	f.Close()
+	return
 }
