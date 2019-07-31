@@ -1,7 +1,9 @@
 package main
 
 import (
+	"fmt"
 	"recommender/schematree"
+	"sort"
 	"sync"
 )
 
@@ -11,6 +13,90 @@ import (
 // an callback method for each of those pairs in order to generate an evalResult for each.
 // Handlers can differ in the way they perform that split of properties.
 type handlerFunc func(*schematree.SubjectSummary, func(schematree.IList, schematree.IList) *evalResult) []*evalResult
+
+// HandlerTakeOneButType will call the evaluator multiple times. Each time it leaves one
+// property out and perform a recommendation with all remaining properties. It makes sure
+// to never leave out a type property: for untyped tree this will have no effects, and for
+// typed trees we actually never want remove the typing information (we consider it
+// essential for any system using types).
+func HandlerTakeOneButType(
+	s *schematree.SubjectSummary,
+	evaluator func(schematree.IList, schematree.IList) *evalResult,
+) []*evalResult {
+
+	results := make([]*evalResult, 0, len(s.Properties))
+
+	// Fill the reduced set with all properties except the last. Last goes to leftout set.
+	reducedSet := make(schematree.IList, len(s.Properties)-1) // assumes len() > 0
+	leftoutSet := make(schematree.IList, 1)
+	cnt := 0 // keep track of how many keys we iterated through, as we want len-1
+	for key := range s.Properties {
+		if cnt != len(s.Properties)-1 {
+			reducedSet[cnt] = key
+			fmt.Println("[RED] " + *reducedSet[cnt].Str)
+		} else {
+			leftoutSet[0] = key
+			fmt.Println("[LEF] " + *leftoutSet[0].Str)
+		}
+		cnt++
+	}
+
+	// Iterate through all leave-out-one combinations with the help of tactful swapping.
+	for idx := 0; idx < len(reducedSet); idx++ {
+		if !leftoutSet[0].IsType() { // Only evaluate if leftout property is not a type property.
+			newResult := evaluator(reducedSet, leftoutSet)
+			newResult.note = *leftoutSet[0].Str
+			results = append(results)
+		}
+		temp := leftoutSet[0]
+		leftoutSet[0] = reducedSet[idx]
+		reducedSet[idx] = temp
+	}
+
+	return results
+}
+
+// HandlerTakeAllButNumTypeBest will select the reduced set by ordering all properties by their
+// "best" criteria { isType() < !isType() < SortOrder } and then pick the first NumType.
+// NumType is defined by the number of type predicates in the subject summary.
+// This handler is almost identical to `handlerTakeButType` for typed tree, and is modified to
+// also work on subject summaries where the tree is untyped.
+// Only a single evaluation is done.
+func HandlerTakeAllButNumTypeBest(
+	s *schematree.SubjectSummary,
+	evaluator func(schematree.IList, schematree.IList) *evalResult,
+) []*evalResult {
+
+	results := make([]*evalResult, 0, 1)
+
+	// Terminate early if reduced set will be empty.
+	if s.NumTypePredicates == 0 {
+		return results
+	}
+
+	// Copy the properties and sort it according to special criteria.
+	completeSet := make(schematree.IList, len(s.Properties))
+	cnt := 0
+	for key := range s.Properties {
+		completeSet[cnt] = key
+		cnt++
+	}
+	sort.Slice(
+		completeSet,
+		func(a, b int) bool {
+			if completeSet[a].IsType() != completeSet[b].IsType() { // xor
+				return completeSet[a].IsType() // only one is true, the first one
+			}
+			return completeSet[a].SortOrder < completeSet[b].SortOrder
+		},
+	)
+
+	// Form the reduced and leftout sets using the complete sorted set.
+	reducedSet := completeSet[:s.NumTypePredicates]
+	leftoutSet := completeSet[s.NumTypePredicates:]
+	results = append(results, evaluator(reducedSet, leftoutSet))
+	return results
+}
 
 // handleTakeButType is a handler method that, upon receiving a subject summary,
 // will call the evaluator with all type properties as reduced properties and all
@@ -84,18 +170,18 @@ func handlerTakeAllButType(
 
 	// Create and fill both subsets
 	reducedProps := make(schematree.IList, 0, countTypes)
-	leftOutProps := make(schematree.IList, 0, len(summary.Properties)-countTypes)
+	leftoutProps := make(schematree.IList, 0, len(summary.Properties)-countTypes)
 	for property := range summary.Properties {
 		if property.IsType() {
 			reducedProps = append(reducedProps, property)
 		} else {
-			leftOutProps = append(leftOutProps, property)
+			leftoutProps = append(leftoutProps, property)
 		}
 	}
 
 	// Only one result is generated for this handler. If no types properties exist, then
 	// the evaluator will return nil.
-	res := evaluator(reducedProps, leftOutProps)
+	res := evaluator(reducedProps, leftoutProps)
 	if res != nil {
 		res.note = summary.Str // @TODO: Temporarily added to aid in evaluation debugging
 		results = append(results, res)
@@ -107,9 +193,7 @@ func handlerTakeAllButType(
 // it will use leave-one-out (or jackknife resampling) to generate and evalResults
 // for every property that is left out.
 //
-// @TODO: Take a good look at this. Somehow this handler accepted a `isTyped` argument
-//        and it is unclear what reason there is. Perhaps, this is actually a hint to
-//        create two handlers out of this one: TakeOneButType and TakeOne
+// @todo: This is probably deprecated by `HandlerTakeOneButType`
 func handlerTake1N(
 	s *schematree.SubjectSummary,
 	evaluator func(schematree.IList, schematree.IList) *evalResult,
@@ -219,6 +303,3 @@ func buildHistoricHandlerTakeButType() handlerFunc {
 		return
 	}
 }
-
-// @TODO: This code is how it originally was done, by evaluating every left out
-//        property in isolation.

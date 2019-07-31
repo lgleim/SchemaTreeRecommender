@@ -23,7 +23,7 @@ type evalResult struct {
 	note       string // @TODO: Temporarily added to aid in evaluation debugging
 }
 
-// evaluatePair will generate an evalResult for a pair of ( reducedProps , leftOutProps ).
+// evaluatePair will generate an evalResult for a pair of ( reducedProps , leftoutProps ).
 // This function will take a list of reduced properties, run the recommender workflow with
 // those reduced properties, generate evaluation result entries by using the recently adquired
 // recommendations and the leftout properties.
@@ -34,7 +34,7 @@ func evaluatePair(
 	tree *schematree.SchemaTree,
 	workflow *strategy.Workflow,
 	reducedProps schematree.IList,
-	leftOutProps schematree.IList,
+	leftoutProps schematree.IList,
 ) *evalResult {
 
 	// Evaluator will not generate stats if no properties exist to make a recommendation.
@@ -61,7 +61,7 @@ func evaluatePair(
 	// Iterate through the list of left out properties to detect matching recommendations.
 	var maxMatchIndex = 0 // indexes always start at zero
 	var numTP, numFP, numFN, numTN, numTPAtL uint32
-	for _, lop := range leftOutProps {
+	for _, lop := range leftoutProps {
 
 		// First go through all recommendations and see if a matching property was found.
 		var matchFound bool
@@ -78,7 +78,7 @@ func evaluatePair(
 		// Calculating the maxMatchIndex helps in the future to calculate the rank.
 		if matchFound {
 			numTP++                             // in practice this is also the number of matches
-			if matchIndex < len(leftOutProps) { // keep track
+			if matchIndex < len(leftoutProps) { // keep track
 				numTPAtL++
 			}
 			if matchIndex > maxMatchIndex { // keep track of max for later
@@ -101,8 +101,8 @@ func evaluatePair(
 	// recommendations exists until that maximal match index.
 	// If not recommendations were found, we add a penalizing number.
 	var rank uint32
-	if numTP == uint32(len(leftOutProps)) {
-		rank = uint32(maxMatchIndex + 1 - len(leftOutProps))
+	if numTP == uint32(len(leftoutProps)) {
+		rank = uint32(maxMatchIndex + 1 - len(leftoutProps))
 	} else {
 		// The rank could also be set to = uint32(len(recs) + 1)
 		// That would make it dependent on number of recommendations. Problem is, when the
@@ -115,7 +115,7 @@ func evaluatePair(
 	result := evalResult{
 		setSize:    uint16(len(reducedProps)),
 		numTypes:   numTypeProps,
-		numLeftOut: uint16(len(leftOutProps)),
+		numLeftOut: uint16(len(leftoutProps)),
 		rank:       rank,
 		numTP:      numTP,
 		numTPAtL:   numTPAtL,
@@ -161,6 +161,10 @@ func evaluateDataset(
 	var handler handlerFunc
 	if evalMethod == "handlerTake1N" { // take one out
 		handler = handlerTake1N
+	} else if evalMethod == "TakeOneButType" { // take one out except type
+		handler = HandlerTakeOneButType
+	} else if evalMethod == "TakeAllButNumTypeBest" { // take all best except number of types
+		handler = HandlerTakeAllButNumTypeBest
 	} else if evalMethod == "handlerTakeButType" { // take all but types
 		handler = handlerTakeButType
 	} else if evalMethod == "TakeAllButType" {
