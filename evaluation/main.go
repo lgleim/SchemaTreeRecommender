@@ -28,6 +28,7 @@ func main() {
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
 	handlerType := flag.String("handler", "handlerTake1N", "Choose the handler handlerTakeButType or handlerTake1N ")
+	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes or numLeftOut ")
 	showResults := flag.Bool("results", false, "Turn on to print list of all evalResults on screen")
 
 	// parse commandline arguments/flags
@@ -143,11 +144,11 @@ func main() {
 		}
 
 		fmt.Printf("Aggregating the results...")
-		datasetStatistics := makeStatistics(datasetResults, "setSize")
+		datasetStatistics := makeStatistics(datasetResults, *groupBy)
 		fmt.Printf(" Complete.\n")
 
 		fmt.Printf("Writing results to CSV file...")
-		writeStatisticsToFile(*testFile, "setSize", datasetStatistics)
+		writeStatisticsToFile(*testFile, *groupBy, datasetStatistics)
 		fmt.Printf(" Complete.\n")
 
 		fmt.Printf("%v+\n", datasetStatistics[0])
