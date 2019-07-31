@@ -66,14 +66,13 @@ func handlerTakeAllButType(
 	summary *schematree.SubjectSummary,
 	evaluator func(schematree.IList, schematree.IList) *evalResult,
 ) []*evalResult {
-	results := make([]*evalResult, 0, 1)
 
 	// Count the number of types and non-types. This is an optimization to speed up
 	// the subset generation.
 	countTypes := 0
 	for property := range summary.Properties {
 		if property.IsType() {
-			countTypes += 1
+			countTypes++
 		}
 	}
 
@@ -88,9 +87,14 @@ func handlerTakeAllButType(
 		}
 	}
 
-	// evalResults will be grouped by the setSize used to generate the recommendations.
-	results = append(results, evaluator(reducedProps, leftOutProps))
-	return results
+	// Only one result is generated for this handler. If no types properties exist, then
+	// the evaluator will return nil.
+	result := evaluator(reducedProps, leftOutProps)
+	if result != nil {
+		result.note = summary.Str    // @TODO: Temporarily added to aid in evaluation debugging
+		return []*evalResult{result} // return an array of a single result
+	}
+	return []*evalResult{} // return an empty array of results
 }
 
 // handlerTake1N is a handler method that, upon receiving a subject summary,
@@ -173,7 +177,7 @@ func buildHistoricHandlerTakeButType() handlerFunc {
 			//leftOutSet = properties[3:]
 		} else {
 			reducedEntitySet = make(schematree.IList, 0, countTypes)
-			leftOutSet = make(schematree.IList, len(properties)-countTypes, len(properties)-countTypes)
+			leftOutSet = make(schematree.IList, 0, len(properties)-countTypes)
 			for _, property := range properties {
 				if property.IsType() {
 					reducedEntitySet = append(reducedEntitySet, property)
@@ -186,19 +190,24 @@ func buildHistoricHandlerTakeButType() handlerFunc {
 		//here, the entries are not sorted by set size, bzt by this roundID, s.t. all results from one entity are grouped
 		mutex.Lock()
 		roundID++
+		currentRoundID := roundID
+		mutex.Unlock()
 
 		boxedLeftOut := make(schematree.IList, 1, 1)
 		for _, leftOut := range leftOutSet {
 			boxedLeftOut[0] = leftOut
 			newResult := evaluator(reducedEntitySet, boxedLeftOut)
-			newResult.group = roundID
+			newResult.group = currentRoundID
+			if leftOut.Str != nil {
+				newResult.note = *leftOut.Str
+			} else {
+				newResult.note = "NIL"
+			}
 			if newResult.numTP < uint32(newResult.numLeftOut) {
 				newResult.rank = 10000 // penalization was set to 10000
 			}
 			results = append(results, newResult)
 		}
-
-		mutex.Unlock()
 
 		//here, the entries are not sorted by set size, bzt by this roundID, s.t. all results from one entity are grouped
 		return

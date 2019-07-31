@@ -23,6 +23,7 @@ type evalResult struct {
 	numFN      uint32 // confusion matrix - number of properties that are left out but have not been recommended
 	duration   int64  // duration (in nanoseconds) of how long the recommendation took
 	group      uint16 // extra value that can store values like custom-made groups
+	note       string // @TODO: Temporarily added to aid in evaluation debugging
 }
 
 type evalSummary struct {
@@ -49,6 +50,7 @@ type evalSummary struct {
 // recommendations and the leftout properties.
 // The aim is to evaluate how well the leftout properties appear in the recommendations that are
 // generated using the reduced set of properties (from where the properties have been left out).
+// Note that 'nil' can be returned.
 func evaluatePair(
 	tree *schematree.SchemaTree,
 	workflow *strategy.Workflow,
@@ -120,7 +122,11 @@ func evaluatePair(
 	if numTP == uint32(len(leftOutProps)) {
 		rank = uint32(maxMatchIndex + 1 - len(leftOutProps))
 	} else {
-		rank = uint32(len(recs) + 1) // could be 10000 too
+		// The rank could also be set to = uint32(len(recs) + 1)
+		// That would make it dependent on number of recommendations. Problem is, when the
+		// recommender returns a small number of recommendations, then the rank is small
+		// as well.
+		rank = 10000 // uint32(len(recs) + 1)
 	}
 
 	// Prepare the full evalResult by deriving some values.
@@ -174,6 +180,8 @@ func evaluateDataset(
 		handler = handlerTake1N
 	} else if evalMethod == "handlerTakeButType" { // take all but types
 		handler = handlerTakeButType
+	} else if evalMethod == "TakeAllButType" {
+		handler = handlerTakeAllButType
 	} else if evalMethod == "historicTakeButType" { // original workings of take all but types
 		handler = buildHistoricHandlerTakeButType()
 	} else {
@@ -192,7 +200,11 @@ func evaluateDataset(
 	subjectCallback := func(summary *schematree.SubjectSummary) {
 		var results []*evalResult = handler(summary, evaluator)
 		for _, res := range results {
-			resultQueue <- *res // send structs to channel (not pointers)
+			// for convenience, this will treat 'nil' results so that old handlers don't need
+			// to look out for 'nil' results that can be returned by the evaluator()
+			if res != nil {
+				resultQueue <- *res // send structs to channel (not pointers)
+			}
 		}
 	}
 

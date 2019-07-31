@@ -28,9 +28,7 @@ func main() {
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
 	handlerType := flag.String("handler", "handlerTake1N", "Choose the handler handlerTakeButType or handlerTake1N ")
-
-	var datasetResults []evalResult
-	var datasetStatistics []evalSummary
+	showResults := flag.Bool("results", false, "Turn on to print list of all evalResults on screen")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -128,10 +126,24 @@ func main() {
 		}
 
 		fmt.Println("Evaluating the dataset.")
-		datasetResults = evaluateDataset(tree, wf, *typedEntities, *testFile, *handlerType)
+		datasetResults := evaluateDataset(tree, wf, *typedEntities, *testFile, *handlerType)
+
+		// @DEBUG This will output the list of evalResult. When building statistics use the commented
+		if *showResults {
+			fmt.Printf(
+				"%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s, %s\n",
+				"group", "setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "duration", "note",
+			)
+			for _, dr := range datasetResults {
+				fmt.Printf(
+					"%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v, %v\n",
+					dr.group, dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.duration, dr.note,
+				)
+			}
+		}
 
 		fmt.Printf("Aggregating the results...")
-		datasetStatistics = makeStatistics(datasetResults)
+		datasetStatistics := makeStatistics(datasetResults)
 		fmt.Printf(" Complete.\n")
 
 		fmt.Printf("Writing results to CSV file...")

@@ -32,6 +32,7 @@ import (
 // equivalent of a transaction in frequent pattern mining
 type SubjectSummary struct {
 	Properties map[*IItem]uint32
+	Str        string // @TODO: Temporarily added the subject names for easier evaluation debugging
 }
 
 func (subj *SubjectSummary) String() string {
@@ -60,7 +61,7 @@ func SubjectSummaryReader(
 	defer reader.Close()
 
 	// set up concurrent handler routines
-	concurrency := 4 * runtime.NumCPU()
+	concurrency := runtime.NumCPU() // * 4    (should be fine with NumCPU since thats num of logical cpus and has no IO operation)
 	summaries := make(chan *SubjectSummary)
 	var wg sync.WaitGroup
 	wg.Add(concurrency)
@@ -79,7 +80,7 @@ func SubjectSummaryReader(
 	var lastSubj string
 	var bytesProcessed int
 	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
-	summary := &SubjectSummary{make(map[*IItem]uint32)}
+	summary := &SubjectSummary{Properties: make(map[*IItem]uint32)}
 	typeProps := []*IItem{pMap.get("http://www.wikidata.org/prop/direct/P31")}
 
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
@@ -111,7 +112,7 @@ func SubjectSummaryReader(
 			}
 
 			lastSubj = string(token) // allocate string (on heap)
-			summary = &SubjectSummary{make(map[*IItem]uint32)}
+			summary = &SubjectSummary{Properties: make(map[*IItem]uint32), Str: lastSubj}
 		}
 
 		// process predicate
