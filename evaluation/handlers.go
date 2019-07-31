@@ -43,7 +43,7 @@ func handlerTakeButType(
 		//leftOut = properties[3:]
 	} else {
 		reducedEntitySet = make(schematree.IList, 0, countTypes)
-		leftOut = make(schematree.IList, len(properties)-countTypes, len(properties)-countTypes)
+		leftOut = make(schematree.IList, 0, len(properties)-countTypes)
 		for _, property := range properties {
 			if property.IsType() {
 				reducedEntitySet = append(reducedEntitySet, property)
@@ -66,6 +66,7 @@ func handlerTakeAllButType(
 	summary *schematree.SubjectSummary,
 	evaluator func(schematree.IList, schematree.IList) *evalResult,
 ) []*evalResult {
+	results := make([]*evalResult, 0, 1)
 
 	// Count the number of types and non-types. This is an optimization to speed up
 	// the subset generation.
@@ -74,6 +75,11 @@ func handlerTakeAllButType(
 		if property.IsType() {
 			countTypes++
 		}
+	}
+
+	// End early if this subject has no types, as recommendation won't be generated without properties.
+	if countTypes == 0 {
+		return results
 	}
 
 	// Create and fill both subsets
@@ -89,12 +95,12 @@ func handlerTakeAllButType(
 
 	// Only one result is generated for this handler. If no types properties exist, then
 	// the evaluator will return nil.
-	result := evaluator(reducedProps, leftOutProps)
-	if result != nil {
-		result.note = summary.Str    // @TODO: Temporarily added to aid in evaluation debugging
-		return []*evalResult{result} // return an array of a single result
+	res := evaluator(reducedProps, leftOutProps)
+	if res != nil {
+		res.note = summary.Str // @TODO: Temporarily added to aid in evaluation debugging
+		results = append(results, res)
 	}
-	return []*evalResult{} // return an empty array of results
+	return results // return an array of one or zero results
 }
 
 // handlerTake1N is a handler method that, upon receiving a subject summary,
