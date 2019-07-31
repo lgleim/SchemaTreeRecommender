@@ -86,11 +86,16 @@ func main() {
 			log.Fatalln("A model must be provided for Batch Test!")
 			return
 		}
-		err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities, *handlerType)
+		fmt.Printf("Evaluating the Config Files...")
+		datasetStatistics, err := batchConfigBenchmark(*trainedModel, *numberConfigs, *typedEntities, *handlerType)
 		if err != nil {
 			log.Fatalln("Batch Config Failed", err)
 			return
 		}
+
+		fmt.Printf("Writing results to CSV file...")
+		writeStatisticsToFile("BatchTestResults", "Config File", datasetStatistics)
+		fmt.Printf(" Complete.\n")
 	} else {
 
 		if *testFile == "" {

@@ -8,27 +8,27 @@ import (
 
 // Run all config files defined in ./configs and create a results csv table in ./
 // with schematree in ../testdata/10M.nt.gz.schemaTree.bin
-func batchConfigBenchmark(treePath string, configs int, typed bool, handler string) (err error) {
+func batchConfigBenchmark(treePath string, configs int, typed bool, handler string) (eval []evalSummary, err error) {
 
 	schema, err := schematree.LoadSchemaTree(treePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var filename string
-	eval := make([]evalSummary, 0, configs)
+	eval = make([]evalSummary, 0, configs)
 	for i := 0; i < configs; i++ {
 		filename = fmt.Sprintf("./configs/config_%v.json", i)
-		res, err := runConfig(&filename, schema, typed, handler)
+		res, err := runConfig(&filename, schema, typed, handler, int16(i))
 		if err != nil {
-			return err
+			return nil, err
 		}
 		eval = append(eval, res)
 	}
-	//writeCSV
-	return nil
+	return
 }
 
-func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler string) (statistic evalSummary, err error) {
+// runs config files and groups by config file
+func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler string, run int16) (statistic evalSummary, err error) {
 	config, err := configuration.ReadConfigFile(name)
 	if err != nil {
 		return
@@ -39,5 +39,6 @@ func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler st
 	}
 	results := evaluateDataset(tree, wf, typed, config.Testset, handler)
 	statistic = makeStatistics(results, "setSize")[0]
+	statistic.groupBy = run
 	return
 }
