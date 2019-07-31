@@ -2,195 +2,150 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"sort"
 )
 
 type evalSummary struct {
-	setSize             int
-	median              float64
-	mean                float64
-	stddev              float64
-	top1                float64
-	top5                float64
-	top10               float64
-	sampleSize          int
-	subjectCount        float64
-	worst5average       float64
-	duration            float64
-	hitRate             float64
-	precision           float64
-	precisionAt10       float64
-	recommendationCount float64
+	groupBy      int16
+	rankAvg      float64
+	rankIfHitAvg float64
+	duration     float64
+	recall       float64
+	precision    float64
+	precisionAtL float64
+	topL         float64
+	top1         float64
+	top5         float64
+	top10        float64
+	median       float64
+	variance     float64
+	subjects     int16
 }
 
 // makeStatics receive a list of evaluation results and makes a summary of them.
-func makeStatistics(results []evalResult) (statistics []evalSummary) {
+func makeStatistics(results []evalResult, groupBy string) (statistics []evalSummary) {
+	average := int(-1)
+	groupedMap := make(map[int][]evalResult)
+	indexList := make([]int, 0, len(results))
+	indexList = append(indexList, average)
 
-	// Legacy step to guarantee that this function works the same.
-	// Before, these variables were given by arguments but now the makeStatistic only receives the
-	// array of evalResults and the variables have to be calculated here.
-	//
-	// In order to implement new features this method should be replaced with other code.
-	durations := make(map[uint16][]int64)
-	stats := make(map[uint16][]uint32)
-	hitRates := make(map[uint16][]bool)
-	recommendationCounts := make(map[uint16][]uint32)
 	for _, res := range results {
+		var group int
 
-		// Basic grouping mechanism just for compatibility. Will use roundID is provided, else setSize.
-		var group uint16
-		if res.group != 0 {
-			group = res.group
-		} else {
-			group = res.setSize
+		if groupBy == "numTypes" {
+			group = int(res.numTypes)
+		} else if groupBy == "setSize" {
+			group = int(res.setSize)
+		} else if groupBy == "numLeftOut" {
+			group = int(res.numLeftOut)
 		}
-
-		stats[0] = append(stats[0], res.rank)
-		stats[group] = append(stats[group], res.rank)
-		durations[0] = append(durations[0], res.duration)
-		durations[group] = append(durations[group], res.duration)
-		hitRates[0] = append(hitRates[0], uint32(res.numLeftOut) == res.numTP)
-		hitRates[group] = append(hitRates[group], uint32(res.numLeftOut) == res.numTP)
-		recommendationCounts[0] = append(recommendationCounts[0], res.numTP+res.numFP)
-		recommendationCounts[group] = append(recommendationCounts[group], res.numTP+res.numFP)
+		indexList = append(indexList, group)
+		groupedMap[average] = append(groupedMap[average], res)
+		groupedMap[group] = append(groupedMap[group], res)
 	}
 
 	// compute statistics
-	duration := make(map[uint16]float64)
-	recommendationCount := make(map[uint16]float64)
+	sort.Ints(indexList)
 
-	for k, v := range durations {
-		for _, res := range v {
-			duration[k] = duration[k] + float64(res)
-		}
-		duration[k] = duration[k] / float64(len(v))
-	}
+	for i, index := range indexList {
+		groupedResults := groupedMap[index]
+		length := len(groupedResults)
 
-	for k, v := range recommendationCounts {
-		if k > 0 {
-			for _, res := range v {
-				recommendationCount[k] = recommendationCount[k] + float64(res)
+		totalDuration := int64(0)
+		totalRank := uint32(0)
+		totalRankIfHit := uint32(0)
+		allHitCount := uint32(0)
+		totalNumTP := uint32(0)
+		totalNumFP := uint32(0)
+		totalNumFN := uint32(0)
+		totalInTop1 := uint32(0)
+		totalInTop5 := uint32(0)
+		totalInTop10 := uint32(0)
+		totalInTopL := uint32(0)
+		totalNumTPAtL := uint32(0)
+
+		for _, result := range groupedResults {
+			if result.rank == 1 {
+				totalInTop1++
 			}
-			recommendationCount[k] = recommendationCount[k] / float64(len(v))
-			recommendationCount[0] = recommendationCount[0] + recommendationCount[k]
-		}
-	}
-
-	statistics = make([]evalSummary, len(stats))
-	setLens := make([]int, 0, len(stats))
-	for setLen := range stats {
-		setLens = append(setLens, int(setLen))
-	}
-
-	var averageSize float64
-	for _, value := range setLens {
-		averageSize += float64(value)
-	}
-	averageSize = averageSize / float64(len(setLens))
-
-	sort.Ints(setLens)
-	for i, setLen := range setLens {
-
-		v := stats[uint16(setLen)]
-		h := hitRates[uint16(setLen)]
-		r := recommendationCount[uint16(setLen)]
-		d := duration[uint16(setLen)]
-
-		if len(v) == 0 {
-			continue
-		}
-		sort.Slice(v, func(i, j int) bool { return v[i] < v[j] })
-
-		var sum uint64
-		var mean, meanSquare, median, variance, top1, top5, top10, precisionAt10, subjects, worst5average, hitRate, precision float64
-
-		l := float64(len(v))
-		top1 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 1 })) / l
-		top5 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 5 })) / l
-		top10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / l
-
-		hitCount := 0
-		for _, hit := range h {
-			if hit {
-				hitCount++
+			if result.rank <= 5 {
+				totalInTop5++
 			}
+			if result.rank <= 10 {
+				totalInTop10++
+			}
+			if result.rank <= uint32(result.numLeftOut) {
+				totalInTopL++
+			}
+			if result.numFN == 0 {
+				totalRankIfHit += result.rank
+				allHitCount++
+			}
+
+			totalDuration += result.duration
+			totalNumTP += result.numTP
+			totalNumFN += result.numFN
+			totalNumFP += result.numFP
+			totalRank += result.rank
+			totalNumTPAtL += result.numTNAtL
 		}
 
-		hitRate = float64(hitCount) / float64(len(h))
+		var mean, meanSquare, median, variance float64
 
-		if r > 0 {
-			precision = float64(hitCount) / r
-		} else {
-			precision = 1
-		}
-
-		if setLen == 0 {
-			precisionAt10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / 10 / float64(len(setLens))
-		} else {
-			precisionAt10 = float64(sort.Search(len(v), func(i int) bool { return v[i] > 10 })) / math.Min(10, float64(len(v)))
-		}
-
-		if len(v) == 1 {
-			mean = float64(v[0])
+		if length == 1 {
+			mean = float64(groupedResults[0].rank)
 			median = mean
 			variance = 0
-			worst5average = mean
-
 		} else {
-			if len(v)%2 != 0 {
-				median = float64(v[len(v)/2])
+			if length%2 != 0 {
+				median = float64(groupedResults[length/2].rank)
 			} else {
-				median = (float64(v[len(v)/2-1]) + float64(v[len(v)/2])) / 2.0
+				median = (float64(groupedResults[length/2-1].rank) + float64(groupedResults[length/2].rank)) / 2.0
 			}
 
-			for _, x := range v {
-				sum += uint64(x)
-				meanSquare += float64(x) * float64(x) / l
+			for _, result := range groupedResults {
+				meanSquare += float64(result.rank) * float64(result.rank) / float64(length)
 			}
-			mean = float64(sum) / l
+			mean = float64(totalRank) / float64(length)
 			variance = meanSquare - (mean * mean)
-
-			worst5 := v[len(v)-int(len(v)/100):]
-			if len(worst5) == 0 {
-				worst5 = append(worst5, 0)
-			}
-			sum = 0
-			for _, value := range worst5 {
-				sum += uint64(value)
-			}
-			worst5average = float64(sum) / float64(len(worst5))
 		}
 
-		if setLen == 0 {
-			subjects = float64(len(v)) / averageSize
-		} else {
-			subjects = float64(len(v)) / float64(setLen)
-		}
-
-		statistics[i] = evalSummary{setLen, median, mean, math.Sqrt(variance), top1, top5, top10, len(v), subjects, worst5average, d, hitRate, precision, precisionAt10, r}
+		statistics[i].duration = float64(totalDuration) / float64(length)
+		statistics[i].recall = float64(totalNumTP) / float64(totalNumTP+totalNumFN)
+		statistics[i].precision = float64(totalNumTP) / float64(totalNumTP+totalNumFP)
+		statistics[i].precisionAtL = float64(totalNumTPAtL) / float64(totalNumTP+totalNumFN)
+		statistics[i].top1 = float64(totalInTop1) / float64(length)
+		statistics[i].top5 = float64(totalInTop5) / float64(length)
+		statistics[i].top10 = float64(totalInTop10) / float64(length)
+		statistics[i].topL = float64(totalInTopL) / float64(length)
+		statistics[i].rankAvg = mean
+		statistics[i].rankIfHitAvg = float64(totalRankIfHit) / float64(allHitCount)
+		statistics[i].groupBy = int16(index)
+		statistics[i].variance = variance
+		statistics[i].median = median
+		statistics[i].subjects = int16(length)
 	}
 	return
 }
 
-func writeStatisticsToFile(filename string, statistics []evalSummary) { // compute statistics
+func writeStatisticsToFile(filename string, groupBy string, statistics []evalSummary) {
 	f, _ := os.Create(filename + ".csv")
 	f.WriteString(fmt.Sprintf(
-		"%8s, %8s, %10s, %9s, %8s, %8s, %8s, %10s, %11s, %8s, %8s, %8s, %13s, %19s\n",
-		"set", "median", "mean", "stddev",
-		"top1", "top5", "top10", "sampleSize",
-		"#subjects", "Duration", "HitRate", "Precision",
-		"PrecisionAt10", "RecommendationCount",
+		"%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s,%15s\n",
+		groupBy, "subjects", "duration",
+		"mean", "meanOfHits", "median", "variance",
+		"top1", "top5", "top10", "topL",
+		"recall", "precision", "precisionAtL",
 	))
 
 	for _, stat := range statistics {
 		f.WriteString(fmt.Sprintf(
-			"%8v, %8.1f, %10.4f, %9.4f, %8.4f, %8.4f, %8.4f, %10v, %11.4f, %8.4f, %8.4f, %8.4f, %13.4f, %19.4f\n",
-			stat.setSize, stat.median, stat.mean, stat.stddev,
-			stat.top1*100, stat.top5*100, stat.top10*100, stat.sampleSize,
-			stat.subjectCount, float64(stat.duration)/1000000, stat.hitRate*100.0, stat.precision,
-			stat.precisionAt10, stat.recommendationCount,
+			"%15d,%15d,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,%15.4f,\n",
+			stat.groupBy, stat.subjects, stat.duration/1000000,
+			stat.rankAvg, stat.rankIfHitAvg, stat.median, stat.variance,
+			stat.top1*100, stat.top5*100, stat.top10*100, stat.topL*100,
+			stat.recall*100, stat.precision*100, stat.precisionAtL*100,
 		))
 	}
 	f.Close()
