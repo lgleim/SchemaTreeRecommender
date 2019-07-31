@@ -88,7 +88,7 @@ func makeStatistics(results []evalResult, groupBy string) (statistics []evalSumm
 			totalNumFN += result.numFN
 			totalNumFP += result.numFP
 			totalRank += result.rank
-			totalNumTPAtL += result.numTNAtL
+			totalNumTPAtL += result.numTPAtL
 		}
 
 		var mean, meanSquare, median, variance float64

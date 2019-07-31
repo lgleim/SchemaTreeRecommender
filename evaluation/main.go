@@ -143,11 +143,11 @@ func main() {
 		}
 
 		fmt.Printf("Aggregating the results...")
-		datasetStatistics := makeStatistics(datasetResults)
+		datasetStatistics := makeStatistics(datasetResults, "setSize")
 		fmt.Printf(" Complete.\n")
 
 		fmt.Printf("Writing results to CSV file...")
-		writeStatisticsToFile(*testFile, datasetStatistics)
+		writeStatisticsToFile(*testFile, "setSize", datasetStatistics)
 		fmt.Printf(" Complete.\n")
 
 		fmt.Printf("%v+\n", datasetStatistics[0])
