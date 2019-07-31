@@ -42,27 +42,29 @@ func HandlerTakeOneButType(
 	}
 
 	// Iterate through all leave-out-one combinations with the help of tactful swapping.
-	for idx := 0; idx < len(reducedSet); idx++ {
+	for idx := 0; idx < len(s.Properties); idx++ {
 		if !leftoutSet[0].IsType() { // Only evaluate if leftout property is not a type property.
 			newResult := evaluator(reducedSet, leftoutSet)
-			newResult.note = *leftoutSet[0].Str
-			results = append(results)
+			newResult.note = s.Str + " " + *leftoutSet[0].Str
+			results = append(results, newResult)
 		}
-		temp := leftoutSet[0]
-		leftoutSet[0] = reducedSet[idx]
-		reducedSet[idx] = temp
+		if idx < len(reducedSet) { // run len(s.Property) times and swap len(s.reducedSet) times
+			temp := leftoutSet[0]
+			leftoutSet[0] = reducedSet[idx]
+			reducedSet[idx] = temp
+		}
 	}
 
 	return results
 }
 
-// HandlerTakeAllButNumTypeBest will select the reduced set by ordering all properties by their
+// HandlerTakeAllButBest will select the reduced set by ordering all properties by their
 // "best" criteria { isType() < !isType() < SortOrder } and then pick the first NumType.
 // NumType is defined by the number of type predicates in the subject summary.
 // This handler is almost identical to `handlerTakeButType` for typed tree, and is modified to
 // also work on subject summaries where the tree is untyped.
 // Only a single evaluation is done.
-func HandlerTakeAllButNumTypeBest(
+func HandlerTakeAllButBest(
 	s *schematree.SubjectSummary,
 	evaluator func(schematree.IList, schematree.IList) *evalResult,
 ) []*evalResult {
@@ -94,7 +96,16 @@ func HandlerTakeAllButNumTypeBest(
 	// Form the reduced and leftout sets using the complete sorted set.
 	reducedSet := completeSet[:s.NumTypePredicates]
 	leftoutSet := completeSet[s.NumTypePredicates:]
-	results = append(results, evaluator(reducedSet, leftoutSet))
+	newResult := evaluator(reducedSet, leftoutSet)
+
+	// @debug: Write all the reduced set property names
+	propNames := ""
+	for _, item := range reducedSet {
+		propNames = propNames + *item.Str + " "
+	}
+	newResult.note = s.Str + " ( " + propNames + ")"
+
+	results = append(results, newResult)
 	return results
 }
 
