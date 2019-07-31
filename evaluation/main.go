@@ -131,13 +131,13 @@ func main() {
 		// @DEBUG This will output the list of evalResult. When building statistics use the commented
 		if *showResults {
 			fmt.Printf(
-				"%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s, %s\n",
-				"group", "setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "duration", "note",
+				"%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s,%10s, %s\n",
+				"group", "setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "numTP@L", "duration", "note",
 			)
 			for _, dr := range datasetResults {
 				fmt.Printf(
-					"%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v, %v\n",
-					dr.group, dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.duration, dr.note,
+					"%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v,%10v, %v\n",
+					dr.group, dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.numTPAtL, dr.duration, dr.note,
 				)
 			}
 		}

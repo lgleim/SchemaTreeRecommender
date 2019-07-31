@@ -14,6 +14,7 @@ type evalResult struct {
 	numLeftOut uint16 // number of properties that have been left out an needed to be recommended back
 	rank       uint32 // rank calculated for recommendation, equal to lec(recommendations)+1 if not fully recommendated back
 	numTP      uint32 // confusion matrix - number of left out properties that have been recommended
+	numTPAtL   uint32 // number of left out properties that have been recommended until position L, where L is numLeftOut
 	numFP      uint32 // confusion matrix - number of recommendations that have not been left out
 	numTN      uint32 // confusion matrix - number of properties that have neither been recommended or left out
 	numFN      uint32 // confusion matrix - number of properties that are left out but have not been recommended
@@ -59,7 +60,7 @@ func evaluatePair(
 
 	// Iterate through the list of left out properties to detect matching recommendations.
 	var maxMatchIndex = 0 // indexes always start at zero
-	var numTP, numFP, numFN, numTN uint32
+	var numTP, numFP, numFN, numTN, numTPAtL uint32
 	for _, lop := range leftOutProps {
 
 		// First go through all recommendations and see if a matching property was found.
@@ -76,8 +77,11 @@ func evaluatePair(
 		// If the current left-out property has a matching recommendation.
 		// Calculating the maxMatchIndex helps in the future to calculate the rank.
 		if matchFound {
-			numTP++ // in practice this is also the number of matches
-			if matchIndex > maxMatchIndex {
+			numTP++                             // in practice this is also the number of matches
+			if matchIndex < len(leftOutProps) { // keep track
+				numTPAtL++
+			}
+			if matchIndex > maxMatchIndex { // keep track of max for later
 				maxMatchIndex = matchIndex
 			}
 		}
@@ -114,6 +118,7 @@ func evaluatePair(
 		numLeftOut: uint16(len(leftOutProps)),
 		rank:       rank,
 		numTP:      numTP,
+		numTPAtL:   numTPAtL,
 		numFN:      numFN,
 		numFP:      numFP,
 		numTN:      numTN,
