@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"recommender/schematree"
 	"sort"
 	"sync"
@@ -26,6 +25,11 @@ func HandlerTakeOneButType(
 
 	results := make([]*evalResult, 0, len(s.Properties))
 
+	// Terminate early if reduced set will be empty.
+	if len(s.Properties)-1 <= 0 {
+		return results
+	}
+
 	// Fill the reduced set with all properties except the last. Last goes to leftout set.
 	reducedSet := make(schematree.IList, len(s.Properties)-1) // assumes len() > 0
 	leftoutSet := make(schematree.IList, 1)
@@ -33,10 +37,10 @@ func HandlerTakeOneButType(
 	for key := range s.Properties {
 		if cnt != len(s.Properties)-1 {
 			reducedSet[cnt] = key
-			fmt.Println("[RED] " + *reducedSet[cnt].Str)
+			// fmt.Println("[RED] " + *reducedSet[cnt].Str)
 		} else {
 			leftoutSet[0] = key
-			fmt.Println("[LEF] " + *leftoutSet[0].Str)
+			// fmt.Println("[LEF] " + *leftoutSet[0].Str)
 		}
 		cnt++
 	}
@@ -58,7 +62,7 @@ func HandlerTakeOneButType(
 	return results
 }
 
-// HandlerTakeAllButBest will select the reduced set by ordering all properties by their
+// HandlerTakeAllButBest will select the reduhtopced set by ordering all properties by their
 // "best" criteria { isType() < !isType() < SortOrder } and then pick the first NumType.
 // NumType is defined by the number of type predicates in the subject summary.
 // This handler is almost identical to `handlerTakeButType` for typed tree, and is modified to
@@ -72,7 +76,7 @@ func HandlerTakeAllButBest(
 	results := make([]*evalResult, 0, 1)
 
 	// Terminate early if reduced set will be empty.
-	if s.NumTypePredicates == 0 {
+	if s.NumTypePredicates <= 0 {
 		return results
 	}
 
