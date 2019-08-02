@@ -169,7 +169,7 @@ func writeStatisticsToFile(filename string, groupBy string, statistics []evalSum
 
 	for _, stat := range statistics {
 		f.WriteString(fmt.Sprintf(
-			"%12d,%12d,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,\n",
+			"%12d,%12d,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f,%12.4f\n",
 			stat.groupBy, stat.subjects, stat.duration/1000000,
 			stat.rankAvg, stat.rankIfHitAvg, stat.median, math.Sqrt(stat.variance),
 			stat.top1*100, stat.top5*100, stat.top10*100, stat.topL*100,
