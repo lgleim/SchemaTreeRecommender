@@ -39,7 +39,7 @@ func makeStatistics(results []evalResult, groupBy string) (statistics []evalSumm
 		if groupBy == "numTypes" {
 			group = int(res.numTypes)
 		} else if groupBy == "numNonTypes" {
-			group = int(res.setSize - res.numTypes)
+			group = int(res.setSize + res.numLeftOut - res.numTypes)
 		} else if groupBy == "setSize" {
 			group = int(res.setSize)
 		} else if groupBy == "numLeftOut" {

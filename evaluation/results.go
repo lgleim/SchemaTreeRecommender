@@ -12,7 +12,7 @@ import (
 
 type evalResult struct {
 	setSize    uint16 // number of properties used to generate recommendations (both type and non-type)
-	numTypes   uint16 // number of type properties in the property set
+	numTypes   uint16 // number of type properties in both reduced and leftout property sets
 	numLeftOut uint16 // number of properties that have been left out an needed to be recommended back
 	rank       uint32 // rank calculated for recommendation, equal to lec(recommendations)+1 if not fully recommendated back
 	numTP      uint32 // confusion matrix - number of left out properties that have been recommended
@@ -52,10 +52,15 @@ func evaluatePair(
 
 	// Calculate the statistics for the evalResult
 
-	// Count the number of properties in the reduced set that are types.
+	// Count the number of properties that are types in both the reduced and leftout sets.
 	var numTypeProps uint16
 	for _, rp := range reducedProps {
 		if rp.IsType() {
+			numTypeProps++
+		}
+	}
+	for _, lop := range leftoutProps {
+		if lop.IsType() {
 			numTypeProps++
 		}
 	}
