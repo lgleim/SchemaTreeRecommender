@@ -136,6 +136,67 @@ func HandlerTakeAllButBest(
 	return results
 }
 
+// HandlerTakeMoreButCommon will iteratively leave out more and more properties but the most common.
+//
+// It will order all properties by their "type-aware most common" criteria:
+//   { isType() < !isType() < SortOrder }
+// It starts with a reduced set that contains all type properties and one non-type property. Then it
+// will add a non-type properties to the reduced set, one-by-one until no more properties are left out.
+//
+// Around NumNonType - 1 evaluations will be done.
+func HandlerTakeMoreButCommon(
+	s *schematree.SubjectSummary,
+	evaluator func(schematree.IList, schematree.IList) *evalResult,
+) []*evalResult {
+
+	// Copy the properties and sort it according to special criteria.
+	completeSet := make(schematree.IList, len(s.Properties))
+	numTypes := 0
+	cnt := 0
+	for key := range s.Properties {
+		completeSet[cnt] = key
+		if key.IsType() {
+			numTypes++
+		}
+		cnt++
+	}
+	sort.Slice(
+		completeSet,
+		func(a, b int) bool { // return true if a comes before b (a < b)
+			if completeSet[a].IsType() != completeSet[b].IsType() { // xor
+				return completeSet[a].IsType() // only one is true, the first one
+			}
+			return completeSet[a].SortOrder < completeSet[b].SortOrder
+		},
+	)
+
+	// Initialize results with expected capacity
+	if len(s.Properties) <= numTypes {
+		return make([]*evalResult, 0)
+	}
+	results := make([]*evalResult, 0, len(s.Properties)-numTypes-1)
+
+	// Start with the smallest reduced set and continue until biggest is achieved.
+	var reducedSet schematree.IList
+	var leftoutSet schematree.IList
+	for sp := numTypes + 1; sp < len(s.Properties); sp++ {
+		reducedSet = completeSet[:sp] // reduced is everything before split-point
+		leftoutSet = completeSet[sp:] // leftout is everything after and including split-point
+		newResult := evaluator(reducedSet, leftoutSet)
+
+		// @debug: Write all the reduced set property names
+		propNames := ""
+		for _, item := range reducedSet {
+			propNames = propNames + *item.Str + " "
+		}
+		newResult.note = s.Str + " ( " + propNames + ")"
+
+		results = append(results, newResult)
+	}
+
+	return results
+}
+
 // handleTakeButType is a handler method that, upon receiving a subject summary,
 // will call the evaluator with all type properties as reduced properties and all
 // others as left out properties.

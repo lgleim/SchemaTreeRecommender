@@ -171,6 +171,8 @@ func evaluateDataset(
 		handler = HandlerTakeOneButType
 	} else if handlerName == "takeAllButBest" { // take all best except number of types
 		handler = HandlerTakeAllButBest
+	} else if handlerName == "takeMoreButCommon" { // take iteratively more bust the most common non-type prop
+		handler = HandlerTakeMoreButCommon
 	} else if handlerName == "handlerTakeButType" { // take all but types
 		handler = handlerTakeButType
 	} else if handlerName == "historicTakeButType" { // original workings of take all but types

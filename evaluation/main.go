@@ -28,7 +28,7 @@ func main() {
 	createConfigsCreater := flag.String("creater", "", "Json which defines the creater config file in ./configs")
 	numberConfigs := flag.Int("numberConfigs", 1, "CNumber of config files in ./configs")
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
-	handlerType := flag.String("handler", "takeOneButType", "Choose the handler: takeOneButType, takeAllButBest")
+	handlerType := flag.String("handler", "takeOneButType", "Choose the handler: takeOneButType, takeAllButBest, takeMoreButCommon")
 	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes, numLeftOut, numNonTypes")
 	writeResults := flag.Bool("results", false, "Turn on to write an additional CSV file with all evaluation results")
 	customName := flag.String("name", "", "Add a custom designation to the generate CSV files")
@@ -144,9 +144,11 @@ func main() {
 		} else {
 			if *typedEntities {
 				testBase += "-typed"
+			} else {
+				testBase += "-standard"
 			}
 			if *configPath != "" {
-				testBase += "-workflow"
+				testBase += "-backoff"
 			}
 			testBase += "-" + *handlerType + "-" + *groupBy
 		}
