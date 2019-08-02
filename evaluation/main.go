@@ -31,6 +31,7 @@ func main() {
 	handlerType := flag.String("handler", "takeOneButType", "Choose the handler: takeOneButType, takeAllButBest")
 	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes, numLeftOut, numNonTypes")
 	writeResults := flag.Bool("results", false, "Turn on to write an additional CSV file with all evaluation results")
+	customName := flag.String("name", "", "Add a custom designation to the generate CSV files")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -136,7 +137,19 @@ func main() {
 		datasetResults := evaluateDataset(tree, wf, *typedEntities, *testFile, *handlerType)
 
 		// Calculate the base name of the input file to generate CSVs with similar names.
-		testBase := recIO.TrimExtensions(*testFile) + "-" + *handlerType + "-" + *groupBy
+		// If customName is defined then will use that and, if not, it will use other flags.
+		testBase := recIO.TrimExtensions(*testFile)
+		if *customName != "" {
+			testBase += "-" + *customName
+		} else {
+			if *typedEntities {
+				testBase += "-typed"
+			}
+			if *configPath != "" {
+				testBase += "-workflow"
+			}
+			testBase += "-" + *handlerType + "-" + *groupBy
+		}
 
 		// When results flag is given, will also write a CSV for evalResult array
 		if *writeResults {
