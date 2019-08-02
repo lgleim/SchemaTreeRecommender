@@ -62,11 +62,19 @@ func HandlerTakeOneButType(
 	return results
 }
 
-// HandlerTakeAllButBest will select the reduhtopced set by ordering all properties by their
-// "best" criteria { isType() < !isType() < SortOrder } and then pick the first NumType.
-// NumType is defined by the number of type predicates in the subject summary.
+// HandlerTakeAllButBest will select the reduced set by ordering all properties by their
+// "best" criteria { isType() < !isType() < SortOrder } and then pick the first NumBest.
+//
+// NumBest is defined using the following method:
+//   - NumBest = number of type predicates in the subject summary
+//   - we required that non-typed trees have at least 1 leftout property:
+//     NumBest = min( NumBest, non-type properties in subject summary - 1 )
+//   - this might result in a reduced set that is equal-or-less-than zero, those cases
+//     will not fire any evaluator
+//
 // This handler is almost identical to `handlerTakeButType` for typed tree, and is modified to
 // also work on subject summaries where the tree is untyped.
+//
 // Only a single evaluation is done.
 func HandlerTakeAllButBest(
 	s *schematree.SubjectSummary,
@@ -82,9 +90,13 @@ func HandlerTakeAllButBest(
 
 	// Copy the properties and sort it according to special criteria.
 	completeSet := make(schematree.IList, len(s.Properties))
+	numNonTypeProps := 0
 	cnt := 0
 	for key := range s.Properties {
 		completeSet[cnt] = key
+		if !key.IsType() {
+			numNonTypeProps++
+		}
 		cnt++
 	}
 	sort.Slice(
@@ -97,9 +109,20 @@ func HandlerTakeAllButBest(
 		},
 	)
 
+	// Calculate NumBest using the described method. (could have used some min function)
+	numBest := s.NumTypePredicates
+	if numNonTypeProps-1 < numBest {
+		numBest = numNonTypeProps - 1
+	}
+
+	// If either the reduced or the leftout set will have no properties, then end early
+	if numBest <= 0 || numBest >= len(completeSet) {
+		return results
+	}
+
 	// Form the reduced and leftout sets using the complete sorted set.
-	reducedSet := completeSet[:s.NumTypePredicates]
-	leftoutSet := completeSet[s.NumTypePredicates:]
+	reducedSet := completeSet[:numBest]
+	leftoutSet := completeSet[numBest:]
 	newResult := evaluator(reducedSet, leftoutSet)
 
 	// @debug: Write all the reduced set property names
