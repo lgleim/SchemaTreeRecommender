@@ -306,10 +306,14 @@ func (tree *SchemaTree) firstPass(fileName string, firstN uint64) {
 		fmt.Print("\n#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#!#\n\n")
 	}
 
-	err := tree.Save(fileName + ".firstPass.bin")
-	if err != nil {
-		log.Fatalln(err)
-	}
+	// Disabled saving the firstPass.bin for now, because using it between untyped and typed
+	// trees can possibly lead to unexpected errors.
+	//
+	// err := tree.Save(fileName + ".firstPass.bin")
+	// if err != nil {
+	// 	log.Fatalln(err)
+	// }
+
 	//} else {
 	// f1, err1 := os.Open(fileName + ".propMap")
 	// f2, err2 := os.Open(fileName + ".typeMap")

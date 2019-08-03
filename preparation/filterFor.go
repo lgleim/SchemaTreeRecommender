@@ -8,7 +8,8 @@ import (
 
 // FilterForSchematree creates a filtered version of a dataset to make it better for
 // usage when building schematrees.
-// TODO: In future, such hard-coded predicates should probably not exist.
+//
+// todo: In future, such hard-coded predicates should probably not exist.
 func FilterForSchematree(filePath string) (*FilterStats, error) {
 	var removalPredicates = [][]byte{
 		[]byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"),
@@ -23,6 +24,15 @@ func FilterForSchematree(filePath string) (*FilterStats, error) {
 
 // FilterForGlossary creates a filtered version of a dataset to make it better for
 // usage when building glossaries.
+//
+// todo: In the future it could use a filter-in mechanism where only specific predicates
+//       are sent to the generated file, instead of filter-out which includes all the
+//       statements except the ones listed. Filter-in should use the same predicates that
+//       are used by the Glossary building step and gives the user a better perception
+//       of what is actually used by the glossary. With filter-in, we know that every
+//       statement in our generated file is also used in the construction of the glossary.
+//       With filter-out there can still be many statements that are silently ignored by
+//       the building step.
 func FilterForGlossary(filePath string) (*FilterStats, error) {
 	var removalPredicates = [][]byte{
 		[]byte("<http://www.w3.org/1999/02/22-rdf-syntax-ns#type>"),

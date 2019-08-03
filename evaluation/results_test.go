@@ -1,28 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"recommender/configuration"
-	"recommender/schematree"
-	"recommender/strategy"
 	"testing"
 )
-
-func TestEval(t *testing.T) {
-	//trainingData := "../testdata/10M.nt.gz"
-	testData := "../testdata/10M.nt_1in2_test"
-
-	schema, _ := schematree.LoadSchemaTree("../testdata/10M.nt.gz.schemaTree.typed.bin")
-	statistics := evaluation(schema, &testData, strategy.MakePresetWorkflow("direct", schema), &schema.Typed, "handlerTakeButType")
-
-	fmt.Printf("\n %+v", statistics[0])
-
-	for i, v := range statistics {
-		if i < 15 {
-			fmt.Printf("\n %+v", v.precisionAt10)
-		}
-	}
-}
 
 func TestReadWriteConfigFile(t *testing.T) {
 	l1 := configuration.Layer{"tooFewRecommendation", "splitProperty", 100, 0.6, "avg", "everySecondItem", "", 0}

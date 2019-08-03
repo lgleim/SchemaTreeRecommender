@@ -41,6 +41,9 @@ type propMap map[string]*IItem
 
 var propMapLock sync.Mutex
 
+// Note: get() is a mutator function. If no property is found with that iri, then it
+//       will build a new property, mutate the propMap to include it, and return the
+//       newly created property. The returned `item` is guaranteed to be non-null.
 // thread-safe
 func (m propMap) get(iri string) (item *IItem) { // TODO: Implement sameas Mapping/Resolution to single group identifier upon insert!
 	item, ok := m[iri]
