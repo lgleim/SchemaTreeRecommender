@@ -9,7 +9,7 @@ import (
 var treePath = "../testdata/10M.nt.gz.schemaTree.bin"
 
 func TestConditions(t *testing.T) {
-	schema, err := schematree.LoadSchemaTree(treePath)
+	schema, err := schematree.Load(treePath)
 	if err != nil {
 		t.Errorf("Schematree could not be loaded")
 	}

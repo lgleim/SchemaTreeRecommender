@@ -74,12 +74,12 @@ func main() {
 
 	if *loadBinary != "" {
 		var err error
-		schema, err = schematree.LoadSchemaTree(*loadBinary)
+		schema, err = schematree.Load(*loadBinary)
 		if err != nil {
 			fmt.Println(err)
 		}
 	} else {
-		schema = schematree.NewSchemaTree(false, 1)
+		schema = schematree.New(false, 1)
 		schema.TwoPass(*fileName, uint64(*firstNsubjects))
 		schema.Save(*fileName + ".schemaTree.bin")
 	}

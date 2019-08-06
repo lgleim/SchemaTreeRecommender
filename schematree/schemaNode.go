@@ -9,22 +9,22 @@ import (
 	"unsafe"
 )
 
-// Nodes of the Schema FP-Tree
-// TODO: determine wether to use hash-maps or arrays to store child notes in the tree
+// SchemaNode is a nodes of the Schema FP-Tree
 type SchemaNode struct {
-	ID     *IItem
-	parent *SchemaNode
-	// Children map[*iItem]*schemaNode
+	ID         *IItem
+	parent     *SchemaNode
 	Children   []*SchemaNode
 	nextSameID *SchemaNode // node traversal pointer
 	Support    uint32      // total frequency of the node in the path
 }
 
+//newRootNode creates a new root node for a given propMap
 func newRootNode(pMap propMap) SchemaNode {
 	// return schemaNode{newRootiItem(), nil, make(map[*iItem]*schemaNode), nil, 0, nil}
 	return SchemaNode{pMap.get("root"), nil, []*SchemaNode{}, nil, 0}
 }
 
+//writeGob encodes the schema node into a binary representation
 func (node *SchemaNode) writeGob(e *gob.Encoder) error {
 	// ID
 	err := e.Encode(node.ID.SortOrder)
@@ -53,6 +53,7 @@ func (node *SchemaNode) writeGob(e *gob.Encoder) error {
 	return nil
 }
 
+// decodeGob decodes the schema node from its binary representation
 func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem) error {
 	// function scoping to allow for garbage collection
 	// err := func() error {
@@ -104,6 +105,7 @@ func (node *SchemaNode) decodeGob(d *gob.Decoder, props []*IItem) error {
 	return nil
 }
 
+//incrementSupport increments the support of the schema node by one
 func (node *SchemaNode) incrementSupport() {
 	atomic.AddUint32(&node.Support, 1)
 }
@@ -113,32 +115,8 @@ const lockPrime = 97 // arbitrary prime number
 var globalItemLocks [lockPrime]*sync.Mutex
 var globalNodeLocks [lockPrime]*sync.RWMutex
 
-func (node *SchemaNode) getChild(term *IItem) *SchemaNode {
-	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
-	// child, ok := node.Children[term]
-	// globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RUnlock()
-
-	// if !ok { // child does not exist, yet
-	// 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Lock()
-
-	// 	// search again, since child might meanwhile have been added by other thread
-	// 	child, ok = node.Children[term]
-	// 	if ok {
-	// 		globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
-	// 		return child
-	// 	}
-
-	// 	// child not found. Create a new one...
-	// 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Lock()
-	// 	child = &SchemaNode{term, node, make(map[*iItem]*SchemaNode), term.traversalPointer, 0, nil}
-	// 	term.traversalPointer = child
-	// 	globalItemLocks[uintptr(unsafe.Pointer(term))%lockPrime].Unlock()
-
-	// 	node.Children[term] = child
-
-	// 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].Unlock()
-	// }
-	// return child
+// getOrCreateChild returns the child of a node associated to a IItem. If such child does not exist, a new child is created.
+func (node *SchemaNode) getOrCreateChild(term *IItem) *SchemaNode {
 
 	// binary search for the child
 	globalNodeLocks[uintptr(unsafe.Pointer(node))%lockPrime].RLock()
@@ -191,6 +169,7 @@ func (node *SchemaNode) getChild(term *IItem) *SchemaNode {
 	return newChild
 }
 
+// prefixContains checks if all properties of a given list are ancestors of a node
 // internal! propertyPath *MUST* be sorted in sortOrder (i.e. descending support)
 // thread-safe!
 func (node *SchemaNode) prefixContains(propertyPath IList) bool {

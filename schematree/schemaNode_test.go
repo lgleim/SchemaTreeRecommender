@@ -1,7 +1,10 @@
 package schematree
 
 import (
+	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 // func TestTimeConsuming(t *testing.T) {
@@ -11,27 +14,32 @@ import (
 //     ...
 // }
 
-func emptyRootNodeTest(root SchemaNode, t *testing.T) {
-	if root.ID == nil {
-		t.Error("schemaNode ID is nil")
-	}
-
-	if *root.ID.Str != "root" {
-		t.Error("iri of root node is not \"root\"")
-	}
-
-	if root.parent != nil {
-		t.Error("parent of root not nil")
-	}
-
-	if len(root.Children) != 0 {
-		t.Error("root node should be created with empty child array")
-	}
+func testPropertyMap() propMap {
+	return make(propMap)
 }
 
-func TestSchemaTree(t *testing.T) {
-	tree := NewSchemaTree(true, 1)
+func testSchemaNode(str string) SchemaNode {
+	return SchemaNode{testPropertyMap().get(str), nil, []*SchemaNode{}, nil, 1}
+}
 
-	t.Run("Root is a proper empty root node", func(t *testing.T) { emptyRootNodeTest(tree.Root, t) })
+func emptyRootNodeTest(t *testing.T, root SchemaNode) {
 
+	assert.NotNil(t, root.ID, "schemaNode ID is nil")
+	assert.Equal(t, "root", *root.ID.Str, "iri of root node is not \"root\"")
+	assert.Nil(t, root.parent, "parent of root not nil")
+	assert.Equal(t, 0, len(root.Children), "root node should be created with empty child array")
+}
+
+func TestNewRootNode(t *testing.T) {
+	root := newRootNode(testPropertyMap())
+	emptyRootNodeTest(t, root)
+}
+
+func TestIncrementSupport(t *testing.T) {
+	node := SchemaNode{testPropertyMap().get("root"), nil, []*SchemaNode{}, nil, 1}
+	assert.Equal(t, uint32(1), node.Support)
+	atomic.AddUint32(&node.Support, 1)
+	assert.Equal(t, uint32(2), node.Support)
+	atomic.AddUint32(&node.Support, 3)
+	assert.Equal(t, uint32(5), node.Support)
 }

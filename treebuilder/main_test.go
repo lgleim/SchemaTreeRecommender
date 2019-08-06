@@ -16,7 +16,7 @@ func TestRecommendation(t *testing.T) {
 
 	var schema *schematree.SchemaTree
 
-	schema = schematree.NewSchemaTree(false, 1)
+	schema = schematree.New(false, 1)
 	schema.TwoPass(fileName, uint64(firstNsubjects))
 	//schema.Save(fileName + ".schemaTree.bin")
 	pMap := schema.PropMap
