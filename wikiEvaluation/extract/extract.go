@@ -70,7 +70,7 @@ func main() {
 		wg.Done()
 	}()
 
-	tree := schematree.NewSchemaTree(false, 1)
+	tree := schematree.New(false, 1)
 
 	subjectCount := schematree.SubjectSummaryReader(*testFile, tree.PropMap, handler, 0, false)
 	logr.Printf("\nEvaluation with total of %v subject sets!\n", subjectCount)

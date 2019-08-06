@@ -22,21 +22,22 @@ type SchemaTree struct {
 }
 
 // Create creates a new schema tree from given dataset with given first n subjects, typed and minSup
-func Create(filename string, firstNsubjects uint64, typed bool, minSup uint32) (tree *SchemaTree) {
+func Create(filename string, firstNsubjects uint64, typed bool, minSup uint32) (*SchemaTree, error) {
 
-	schema := NewSchemaTree(typed, minSup)
+	schema := New(typed, minSup)
 	schema.TwoPass(filename, uint64(firstNsubjects))
+	var err error
 	if typed {
-		schema.Save(filename + ".schemaTree.typed.bin")
+		err = schema.Save(filename + ".schemaTree.typed.bin")
 	} else {
-		schema.Save(filename + ".schemaTree.bin")
+		err = schema.Save(filename + ".schemaTree.bin")
 	}
 	PrintMemUsage()
-	return schema
+	return schema, err
 }
 
-// NewSchemaTree returns a newly allocated and initialized schema tree
-func NewSchemaTree(typed bool, minSup uint32) (tree *SchemaTree) {
+// New returns a newly allocated and initialized schema tree
+func New(typed bool, minSup uint32) (tree *SchemaTree) {
 	if minSup < 1 {
 		minSup = 1
 	}
@@ -80,17 +81,10 @@ func (tree *SchemaTree) Insert(e *SubjectSummary) {
 	node := &tree.Root
 	node.incrementSupport()
 	for _, prop := range properties {
-		node = node.getChild(prop) // recurse, i.e., node.getChild(prop).insert(properties[1:], types)
+		node = node.getOrCreateChild(prop) // recurse, i.e., node.getOrCreateChild(prop).insert(properties[1:], types)
 		node.incrementSupport()
 	}
 
-}
-
-// Reorganize adapts the schematree to a new sort order of items (not implemented)
-func (tree *SchemaTree) reorganize() {
-	tree.updateSortOrder()
-
-	// TODO: implement actual tree reorganization
 }
 
 // updateSortOrder updates iList according to actual frequencies
@@ -200,8 +194,8 @@ func (tree *SchemaTree) Save(filePath string) error {
 	return err
 }
 
-// LoadSchemaTree loads a binarized SchemaTree from disk
-func LoadSchemaTree(filePath string) (*SchemaTree, error) {
+// Load loads a binarized SchemaTree from disk
+func Load(filePath string) (*SchemaTree, error) {
 	// Alternatively via GobDecoder(...): https://stackoverflow.com/a/12854659
 
 	fmt.Printf("Loading schema (from file %v): ", filePath)
@@ -222,7 +216,7 @@ func LoadSchemaTree(filePath string) (*SchemaTree, error) {
 	defer r.Close()
 
 	/// decoding
-	tree := NewSchemaTree(false, 1)
+	tree := New(false, 1)
 	d := gob.NewDecoder(r)
 
 	// decode propMap
@@ -320,7 +314,7 @@ func (tree *SchemaTree) firstPass(fileName string, firstN uint64) {
 
 	// if err1 == nil && err2 == nil {
 	// 	fmt.Print("Loading type- and propertyMap directly from corresponding gobs: ")
-	// 	tmp := NewSchemaTree(false, 1)
+	// 	tmp := New(false, 1)
 	// 	gob.NewDecoder(f1).Decode(&tmp.propMap)
 	// 	gob.NewDecoder(f2).Decode(&tmp.typeMap)
 	// 	tmp.updateSortOrder()
@@ -329,7 +323,7 @@ func (tree *SchemaTree) firstPass(fileName string, firstN uint64) {
 	// } else {
 
 	// TODO: Think whether its OK to re-use existing files on build step (maybe with optional arg)
-	//	tmp, err := LoadSchemaTree(fileName + ".firstPass.bin")
+	//	tmp, err := Load(fileName + ".firstPass.bin")
 	//	if err != nil {
 	//		log.Fatalln(err)
 	//	}

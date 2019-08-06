@@ -18,21 +18,9 @@ func (ps PropertyRecommendations) contains(str string, prob float64) bool {
 	return false
 }
 
-func TestString(t *testing.T) {
-
-}
-
-func TestTop10AvgProbability(t *testing.T) {
-
-}
-
-func TestContains(t *testing.T) {
-
-}
-
 func TestRecommend(t *testing.T) {
 
-	tree, _ := LoadSchemaTree(typedTreepath)
+	tree, _ := Load(typedTreepath)
 
 	t.Run("one type", func(t *testing.T) {
 		list := tree.Recommend([]string{}, []string{"http://www.wikidata.org/entity/Q515"}) // City
@@ -50,7 +38,7 @@ func TestRecommend(t *testing.T) {
 
 func TestRecommendProperty(t *testing.T) {
 
-	tree, _ := LoadSchemaTree(typedTreepath)
+	tree, _ := Load(typedTreepath)
 	pMap := tree.PropMap
 
 	t.Run("Only type property", func(t *testing.T) {
@@ -64,9 +52,5 @@ func TestRecommendProperty(t *testing.T) {
 		assert.False(t, list.contains("http://www.wikidata.org/prop/direct/P17", 0.5))             // country
 		assert.False(t, list.contains("http://www.wikidata.org/prop/direct/P625", 0.5))            // coordinate location
 	})
-
-}
-
-func TestRecommendType(t *testing.T) {
 
 }

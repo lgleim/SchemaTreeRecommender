@@ -44,7 +44,7 @@ func TestManipulator(t *testing.T) {
 }
 
 func TestExecRecommender(t *testing.T) {
-	schema, err := ST.LoadSchemaTree(treePath)
+	schema, err := ST.Load(treePath)
 
 	if err != nil {
 		t.Errorf("Schematree could not be loaded")

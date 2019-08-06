@@ -132,7 +132,10 @@ func main() {
 			inputDataset := &args[0]
 
 			// Create the tree output file by using the input dataset.
-			schema := schematree.Create(*inputDataset, uint64(firstNsubjects), false, 0)
+			schema, err := schematree.Create(*inputDataset, uint64(firstNsubjects), false, 0)
+			if err != nil {
+				log.Panicln(err)
+			}
 
 			if writeOutPropertyFreqs {
 				propFreqsPath := *inputDataset + ".propertyFreqs.csv"
@@ -164,7 +167,10 @@ func main() {
 			inputDataset := &args[0]
 
 			// Create the tree output file by using the input dataset.
-			schema := schematree.Create(*inputDataset, uint64(firstNsubjects), true, 0)
+			schema, err := schematree.Create(*inputDataset, uint64(firstNsubjects), true, 0)
+			if err != nil {
+				log.Panicln(err)
+			}
 
 			if writeOutPropertyFreqs {
 				propFreqsPath := *inputDataset + ".propertyFreqs.csv"
@@ -224,7 +230,7 @@ func main() {
 			glossaryBinary := &args[1]
 
 			// Load the schematree from the binary file.
-			model, err := schematree.LoadSchemaTree(*modelBinary)
+			model, err := schematree.Load(*modelBinary)
 			if err != nil {
 				log.Panicln(err)
 			}
@@ -285,7 +291,7 @@ func main() {
 			treeBinary := &args[0]
 
 			// Load the schematree from the binary file.
-			schema, err := schematree.LoadSchemaTree(*treeBinary)
+			schema, err := schematree.Load(*treeBinary)
 			if err != nil {
 				log.Panicln(err)
 			}
