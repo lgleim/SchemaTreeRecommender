@@ -26,6 +26,52 @@ Runs all the config files ./configs/config_i.json in in 1...n
 
 note that you need to replace the names for the schematree the test set and the workflow config json file
 
+## Example of a data preparation script (untested)
+
+This is an example of how a complete data preparation pipeline could run. It also includes a 1:999 split of the dataset which is usually omitted for production usage.
+
+```bash
+#!/usr/bin/env bash
+
+# Edit these values for personal usage
+BIN="$HOME/go/src/recommender/recommender"
+MAKEDOWNLOAD=false
+URL="https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz"
+DSBASE="$HOME/data/truthy" # file where dataset is stored without '.nt.gz' extension
+MAKEGLOSSARY=false
+STARTSERVER=false # also requires that glossary is made
+
+
+
+# Only make download if flag is set
+if [ "$MAKEDOWNLOAD" = true ] ; then
+    curl $URL --output $DSBASE.nt.gz
+fi
+
+# Split and filter preparation steps
+$BIN split-dataset  by-type $DBBASE.nt.gz
+$BIN filter-dataset for-schematree $DBBASE-item.nt.gz
+gzip -cd $DBBASE-item-filtered.nt.gz | sort | gzip > $DBBASE-item-filtered-sorted.nt.gz
+$BIN split-dataset  1-in-n $DBBASE-item-filtered-sorted.nt.gz -n 1000
+
+$BIN build-tree       $DBBASE-item-filtered-sorted-1in1000-train.nt.gz
+echo "Standard Tree model was probably stored in: $DSBASE-item-filtered-sorted-1in1000-train.nt.gz.schemaTree.bin"
+
+$BIN build-tree-typed $DBBASE-item-filtered-sorted-1in1000-train.nt.gz
+echo "Typed Tree model was probably stored in: $DSBASE-item-filtered-sorted-1in1000-train.nt.gz.schemaTree.typed.bin"
+
+# Only treat glossary if flag is set
+if [ "$MAKEGLOSSARY" = true ] ; then
+    $BIN filter-dataset for-glossary $DBBASE-prop.nt.gz
+    $BIN build-glossary $DBBASE-prop-filtered.nt.gz
+fi
+
+# Only start webserver if flag is set
+if [ "$STARTSERVER" = true ] ; then
+    $BIN serve $DSBASE-item-filtered-sorted-1in1000-train.nt.gz.schemaTree.typed.bin $DBBASE-prop-filtered.nt.gz.glossary.bin
+fi
+```
+
 ## Example of an evaluation script
 
 What follows is an example of an evaluation script that is useful to generate statistics in multiple views in one go. It will run evaluations with multiple combinations of models, workflows, handlers and statistic groups. After the evaluations are performed it will package the results for easier downloading.
@@ -34,11 +80,13 @@ What follows is an example of an evaluation script that is useful to generate st
 #!/usr/bin/env bash
 
 # Change this to zip all final files into another zip
-RUN="r1"
-TESTBASE="truthy-item-filtered-sorted-1pm"
-MODELBASE="truthy-item-filtered-sorted-999pm"
-
 BIN="$HOME/go/src/recommender/evaluation/evaluation"
+RUN="r1"
+TESTBASE="truthy-item-filtered-sorted-1pm"     # truthy-item-filtered-sorted-1in1000-test
+MODELBASE="truthy-item-filtered-sorted-999pm"  # truthy-item-filtered-sorted-1in1000-train
+
+
+
 COMMON="-testSet $HOME/data/$TESTBASE.nt.gz"
 
 STDTREE="-model $HOME/data/$MODELBASE-stdTree.bin"
