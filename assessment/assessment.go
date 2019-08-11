@@ -1,8 +1,24 @@
 package assessment
 
 import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
 	"recommender/schematree"
+	"strings"
+	"time"
 )
+
+var netClient = &http.Client{
+	Transport: &http.Transport{
+		MaxIdleConns:       10,
+		MaxConnsPerHost:    5,
+		IdleConnTimeout:    30 * time.Second,
+		DisableCompression: true,
+	},
+	Timeout: time.Second * 120,
+}
 
 // Instance - An assessment on properties
 //
@@ -62,4 +78,47 @@ func (inst *Instance) CalcRecommendations() schematree.PropertyRecommendations {
 		return inst.cachedRecommendations
 	}
 	return inst.tree.RecommendProperty(inst.Props)
+}
+
+// GetWikiRecs computes recommendations from a local wikidata PropertySuggester
+func (inst *Instance) GetWikiRecs(Properties []string) schematree.PropertyRecommendations {
+	// url := "https://www.wikidata.org/w/api.php?action=wbsgetsuggestions&limit=10&format=json&properties=" + strings.Join(Properties, "|")
+	url := "http://localhost:8181/w/api.php?action=wbsgetsuggestions&format=json&properties=" + strings.Join(Properties, "|")
+	res, err := netClient.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	if res.StatusCode != 200 {
+		b, _ := ioutil.ReadAll(res.Body)
+		panic(fmt.Sprint(url, string(b)))
+	}
+	var recs struct {
+		Search []struct {
+			ID string `json:"id"`
+			// Rating float64 `json:"rating"`
+		} `json:"search"`
+	}
+	err = json.NewDecoder(res.Body).Decode(&recs)
+	if err != nil {
+		panic(fmt.Sprintf("received malformatted response from wikidata recommender for property set %v. Error: %v", Properties, err))
+	}
+	// type RankedPropertyCandidate struct {
+	// 	Property    *IItem
+	// 	Probability float64
+	// }
+	ranked := make([]schematree.RankedPropertyCandidate, 0, len(recs.Search))
+	for _, r := range recs.Search {
+		item, ok := inst.tree.PropMap["http://www.wikidata.org/prop/direct/"+r.ID]
+		if !ok {
+			item, ok = inst.tree.PropMap["http://www.wikidata.org/prop/"+r.ID]
+		}
+		if ok {
+			ranked = append(ranked, schematree.RankedPropertyCandidate{
+				Property:    item,
+				Probability: 0, //r.Rating,
+			})
+		}
+	}
+	// fmt.Println(url, ranked)
+	return ranked
 }

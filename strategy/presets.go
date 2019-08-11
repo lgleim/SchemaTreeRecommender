@@ -6,6 +6,7 @@ import (
 	"recommender/assessment"
 	"recommender/backoff"
 	"recommender/schematree"
+	"strings"
 )
 
 // Helper method to create a condition that always evaluates to true.
@@ -74,6 +75,31 @@ func MakeTooUnlikelyRecommendationsCondition(threshold float32) Condition {
 func MakeAssessmentAwareDirectProcedure() Procedure {
 	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
 		return asm.CalcRecommendations()
+	}
+}
+
+const ePrefix = "t#http://www.wikidata.org/entity/"
+const pPrefix = "http://www.wikidata.org/prop/"
+
+// Helper method to create Recommenders using the wikidata recommender
+func MakeWikidataRecommender(useTypes, useProperties bool) Procedure {
+	return func(asm *assessment.Instance) schematree.PropertyRecommendations {
+		properties := []string{}
+		for _, p := range asm.Props {
+			if p.IsType() {
+				if useTypes {
+					properties = append(properties, strings.TrimPrefix(*p.Str, ePrefix))
+				}
+			} else {
+				if useProperties {
+					properties = append(
+						properties,
+						strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(*p.Str, pPrefix), "direct/"), "direct-normalized/"))
+				}
+
+			}
+		}
+		return asm.GetWikiRecs(properties)
 	}
 }
 
@@ -152,6 +178,25 @@ func MakePresetWorkflow(name string, tree *schematree.SchemaTree) *Workflow {
 			MakeAlwaysCondition(),
 			MakeAssessmentAwareDirectProcedure(), //MakeDirectProcedure(tree),
 			"always run direct algorithm",
+		)
+
+	case "wikidata-property":
+		wf.Push(
+			MakeAlwaysCondition(),
+			MakeWikidataRecommender(false, true),
+			"Wikidata recommender using only properties as input",
+		)
+	case "wikidata-type":
+		wf.Push(
+			MakeAlwaysCondition(),
+			MakeWikidataRecommender(true, false),
+			"Wikidata recommender using only properties as input",
+		)
+	case "wikidata-type-property":
+		wf.Push(
+			MakeAlwaysCondition(),
+			MakeWikidataRecommender(true, true),
+			"Wikidata recommender using only properties as input",
 		)
 
 	default:

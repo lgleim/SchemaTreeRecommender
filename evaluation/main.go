@@ -32,6 +32,7 @@ func main() {
 	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes, numLeftOut, numNonTypes")
 	writeResults := flag.Bool("results", false, "Turn on to write an additional CSV file with all evaluation results")
 	customName := flag.String("name", "", "Add a custom designation to the generate CSV files")
+	wikiEvaluation := flag.Bool("wikiEvaluation", false, "Special Evaluation mode to evaluate the wikidata PropertySuggester")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -104,6 +105,10 @@ func main() {
 			log.Fatalln("A test set must be provided!")
 		}
 
+		if *wikiEvaluation {
+			*typedEntities = true
+		}
+
 		// evaluation
 		if *trainedModel == "" {
 			log.Fatalln("A model must be provided!")
@@ -130,7 +135,11 @@ func main() {
 			}
 		} else {
 			// if no workflow config given then run standard recommender
-			wf = strategy.MakePresetWorkflow("direct", tree)
+			if *wikiEvaluation {
+				wf = strategy.MakePresetWorkflow("wikidata-type-property", tree)
+			} else {
+				wf = strategy.MakePresetWorkflow("direct", tree)
+			}
 		}
 
 		fmt.Println("Evaluating the dataset...")
