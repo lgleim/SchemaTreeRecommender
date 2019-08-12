@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	rio "recommender/io"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -25,7 +26,7 @@ import (
 	gzip "github.com/klauspost/pgzip"
 
 	"github.com/biogo/hts/bgzf"
-	"gopkg.in/cheggaaa/pb.v1"
+	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
 // All type annotations (types) and properties (properties) for a fixed subject
@@ -90,6 +91,11 @@ func SubjectSummaryReader(
 	//summary := &SubjectSummary{Properties: make(map[*IItem]uint32)}
 	typeProps := []*IItem{pMap.get("http://www.wikidata.org/prop/direct/P31")}
 
+	replacr := strings.NewReplacer(
+		"/direct-normalized/", "/",
+		"/direct/", "/",
+	)
+
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
 		if isPrefix {
 			fmt.Printf("Line Buffer too small!!! Line prefix: %v\n", string(line[:200]))
@@ -126,7 +132,12 @@ func SubjectSummaryReader(
 		line = line[bytesProcessed:]
 		bytesProcessed, token = firstWord(line)
 
-		predicate := pMap.get(string(token))
+		var predicate *IItem
+		if strings.HasPrefix(string(token), "http://www.wikidata.org/prop/") {
+			predicate = pMap.get(replacr.Replace(string(token)))
+		} else {
+			predicate = pMap.get(string(token))
+		}
 		summary.Properties[predicate]++
 
 		// Count the number of predicates found for that subject. Unfortunately
