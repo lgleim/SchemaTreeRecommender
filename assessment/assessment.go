@@ -109,9 +109,9 @@ func (inst *Instance) GetWikiRecs(Properties []string) schematree.PropertyRecomm
 	ranked := make([]schematree.RankedPropertyCandidate, 0, len(recs.Search))
 	for _, r := range recs.Search {
 		item, ok := inst.tree.PropMap["http://www.wikidata.org/prop/direct/"+r.ID]
-		if !ok {
-			item, ok = inst.tree.PropMap["http://www.wikidata.org/prop/"+r.ID]
-		}
+		// if !ok {
+		// 	item, ok = inst.tree.PropMap["http://www.wikidata.org/prop/"+r.ID]
+		// }
 		if ok {
 			ranked = append(ranked, schematree.RankedPropertyCandidate{
 				Property:    item,

@@ -91,11 +91,6 @@ func SubjectSummaryReader(
 	//summary := &SubjectSummary{Properties: make(map[*IItem]uint32)}
 	typeProps := []*IItem{pMap.get("http://www.wikidata.org/prop/direct/P31")}
 
-	replacr := strings.NewReplacer(
-		"/direct-normalized/", "/",
-		"/direct/", "/",
-	)
-
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
 		if isPrefix {
 			fmt.Printf("Line Buffer too small!!! Line prefix: %v\n", string(line[:200]))
@@ -132,12 +127,14 @@ func SubjectSummaryReader(
 		line = line[bytesProcessed:]
 		bytesProcessed, token = firstWord(line)
 
-		var predicate *IItem
-		if strings.HasPrefix(string(token), "http://www.wikidata.org/prop/") {
-			predicate = pMap.get(replacr.Replace(string(token)))
-		} else {
-			predicate = pMap.get(string(token))
+		// c.f. https://www.mediawiki.org/wiki/Wikibase/Indexing/RDF_Dump_Format#Prefixes_used
+		if strings.HasPrefix(string(token), "http://www.wikidata.org/prop/") &&
+			!strings.HasPrefix(string(token), "http://www.wikidata.org/prop/direct/") {
+			continue
 		}
+
+		predicate := pMap.get(string(token))
+
 		summary.Properties[predicate]++
 
 		// Count the number of predicates found for that subject. Unfortunately
