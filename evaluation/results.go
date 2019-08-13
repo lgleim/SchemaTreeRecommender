@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"recommender/assessment"
 	"recommender/schematree"
 	"recommender/strategy"
 	"sync"
 	"time"
+
+	gzip "github.com/klauspost/pgzip"
 )
 
 type evalResult struct {
@@ -50,6 +54,11 @@ func evaluatePair(
 	recs := workflow.Recommend(asm)
 	duration := time.Since(start).Nanoseconds()
 
+	// hack for wikiEvaluation
+	if len(recs) > 500 {
+		recs = recs[:500]
+	}
+
 	// Calculate the statistics for the evalResult
 
 	// Count the number of properties that are types in both the reduced and leftout sets.
@@ -66,39 +75,57 @@ func evaluatePair(
 	}
 
 	// Iterate through the list of left out properties to detect matching recommendations.
-	var maxMatchIndex = 0 // indexes always start at zero
+	// var maxMatchIndex = 0 // indexes always start at zero
 	var numTP, numFP, numFN, numTN, numTPAtL uint32
-	for _, lop := range leftoutProps {
+	// for _, lop := range leftoutProps {
 
-		// First go through all recommendations and see if a matching property was found.
-		var matchFound bool
-		var matchIndex int
-		for i, rec := range recs {
-			if rec.Property == lop { // @todo: check if same pointers
-				matchFound = true
-				matchIndex = i
+	// 	// First go through all recommendations and see if a matching property was found.
+	// 	var matchFound bool
+	// 	var matchIndex int
+	// 	for i, rec := range recs {
+	// 		if rec.Property == lop { // @todo: check if same pointers
+	// 			matchFound = true
+	// 			matchIndex = i
+	// 			break
+	// 		}
+	// 	}
+
+	// 	// If the current left-out property has a matching recommendation.
+	// 	// Calculating the maxMatchIndex helps in the future to calculate the rank.
+	// 	if matchFound {
+	// 		numTP++                             // in practice this is also the number of matches
+	// 		if matchIndex < len(leftoutProps) { // keep track
+	// 			numTPAtL++
+	// 		}
+	// 		if matchIndex > maxMatchIndex { // keep track of max for later
+	// 			maxMatchIndex = matchIndex
+	// 		}
+	// 	}
+
+	// 	// If the current left-out property does not have a matching recommendation.
+	// 	if !matchFound {
+	// 		numFN++
+	// 	}
+	// }
+	matchFound := false
+	rank := uint32(500)
+	for i, rec := range recs {
+		for _, lop := range leftoutProps {
+			if rec.Property == lop {
+				numTP++                    // in practice this is also the number of matches
+				if i < len(leftoutProps) { // keep track
+					numTPAtL++
+				}
+				if !matchFound { // only record the rank of the first correct recommendation
+					rank = uint32(i) + 1
+					matchFound = true
+				}
 				break
 			}
 		}
-
-		// If the current left-out property has a matching recommendation.
-		// Calculating the maxMatchIndex helps in the future to calculate the rank.
-		if matchFound {
-			numTP++                             // in practice this is also the number of matches
-			if matchIndex < len(leftoutProps) { // keep track
-				numTPAtL++
-			}
-			if matchIndex > maxMatchIndex { // keep track of max for later
-				maxMatchIndex = matchIndex
-			}
-		}
-
-		// If the current left-out property does not have a matching recommendation.
-		if !matchFound {
-			numFN++
-		}
 	}
-	numFP = uint32(len(recs)) - numTP
+	numFN = uint32(len(leftoutProps)) - numTP // number of not recovered properties
+	numFP = uint32(len(recs)) - numTP         // number of Recommended but not relevant properties
 	numTN = uint32(len(tree.PropMap)) - numTP - numFN - numFP
 
 	// Calculate the rank: the number of non-left out properties that were given before
@@ -107,17 +134,17 @@ func evaluatePair(
 	// of all matches and using the number of matches to find out how many non-matching
 	// recommendations exists until that maximal match index.
 	// If not recommendations were found, we add a penalizing number.
-	var rank uint32
-	if numTP == uint32(len(leftoutProps)) {
-		rank = uint32(maxMatchIndex + 1 - len(leftoutProps) + 1) // +1 for index, +1 because best is 1
-	} else {
-		// The rank could also be set to = uint32(len(recs) + 1)
-		// That would make it dependent on number of recommendations. Problem is, when the
-		// recommender returns a small number of recommendations, then the rank is small
-		// as well.
-		// Or maybe set it to = uint32(len(tree.propMap) + 1)
-		rank = 10000 // uint32(len(recs) + 1)
-	}
+	// var rank uint32
+	// if numTP == uint32(len(leftoutProps)) {
+	// 	rank = uint32(maxMatchIndex + 1 - len(leftoutProps) + 1) // +1 for index, +1 because best is 1
+	// } else {
+	// 	// The rank could also be set to = uint32(len(recs) + 1)
+	// 	// That would make it dependent on number of recommendations. Problem is, when the
+	// 	// recommender returns a small number of recommendations, then the rank is small
+	// 	// as well.
+	// 	// Or maybe set it to = uint32(len(tree.propMap) + 1)
+	// 	rank = 10000 // uint32(len(recs) + 1)
+	// }
 
 	// Prepare the full evalResult by deriving some values.
 	result := evalResult{
@@ -212,18 +239,47 @@ func evaluateDataset(
 
 // writeResultsToFile will output the entire evalResult array to a CSV file
 func writeResultsToFile(filename string, results []evalResult) {
-	f, _ := os.Create(filename + ".csv")
-	f.WriteString(fmt.Sprintf(
-		"%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s, %s\n",
-		"setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "numTP@L", "dur(ys)", "note",
-	))
-
-	for _, dr := range results {
-		f.WriteString(fmt.Sprintf(
-			"%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v, %s\n",
-			dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.numTPAtL, dr.duration, dr.note,
-		))
+	f, err := os.Create(filename + ".json")
+	if err != nil {
+		log.Fatalln("Could not open .json file")
 	}
-	f.Close()
+	defer f.Close()
+	g := gzip.NewWriter(f)
+	defer g.Close()
+	e := json.NewEncoder(g)
+	err = e.Encode(results)
+	if err != nil {
+		fmt.Println("Failed to write results to file", err)
+	}
+
+	// f, _ := os.Create(filename + ".csv")
+	// f.WriteString(fmt.Sprintf(
+	// 	"%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s,%12s, %s\n",
+	// 	"setSize", "numTypes", "numLeftOut", "rank", "numTP", "numFP", "numTN", "numFN", "numTP@L", "dur(ys)", "note",
+	// ))
+
+	// for _, dr := range results {
+	// 	f.WriteString(fmt.Sprintf(
+	// 		"%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v,%12v, %s\n",
+	// 		dr.setSize, dr.numTypes, dr.numLeftOut, dr.rank, dr.numTP, dr.numFP, dr.numTN, dr.numFN, dr.numTPAtL, dr.duration, dr.note,
+	// 	))
+	// }
+	// f.Close()
+	return
+}
+
+func loadResultsFromFile(filename string) (results []evalResult) {
+	f, err := os.Open(filename + ".json")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer f.Close()
+	r, err := gzip.NewReader(f)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer r.Close()
+	json.NewDecoder(r).Decode(&results)
+
 	return
 }

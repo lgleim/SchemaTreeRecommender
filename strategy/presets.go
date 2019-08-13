@@ -79,7 +79,7 @@ func MakeAssessmentAwareDirectProcedure() Procedure {
 }
 
 const ePrefix = "t#http://www.wikidata.org/entity/"
-const pPrefix = "http://www.wikidata.org/prop/"
+const pPrefix = "http://www.wikidata.org/prop/direct/"
 
 // Helper method to create Recommenders using the wikidata recommender
 func MakeWikidataRecommender(useTypes, useProperties bool) Procedure {
@@ -87,15 +87,13 @@ func MakeWikidataRecommender(useTypes, useProperties bool) Procedure {
 		properties := []string{}
 		for _, p := range asm.Props {
 			if p.IsType() {
-				if useTypes {
-					properties = append(properties, strings.TrimPrefix(*p.Str, ePrefix))
-				}
+				// if useTypes {
+				properties = append(properties, strings.TrimPrefix(*p.Str, ePrefix))
+				// }
 			} else {
-				if useProperties {
-					properties = append(
-						properties,
-						strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(*p.Str, pPrefix), "direct/"), "direct-normalized/"))
-				}
+				// if useProperties {
+				properties = append(properties, strings.TrimPrefix(*p.Str, pPrefix))
+				// }
 
 			}
 		}

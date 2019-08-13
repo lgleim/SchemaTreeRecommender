@@ -26,132 +26,124 @@ type evalSummary struct {
 
 // makeStatics receive a list of evaluation results and makes a summary of them.
 func makeStatistics(results []evalResult, groupBy string) (statistics []evalSummary) {
-	average := int(-1)
-	groupedMap := make(map[int][]evalResult)
+	resultsByGroup := make(map[int][]evalResult) // stores grouped results
+	const allResults int = -1                    // catch all group
 	statistics = make([]evalSummary, 0, len(results)+1)
-	indexList := make([]int, 0, len(results))
-	indexList = append(indexList, average)
-	indexPresenceCheck := make(map[int]struct{})
+	groupIds := []int{allResults} // keep track of existing groups
+	groupExists := make(map[int]bool)
 
 	for _, res := range results {
-		var group int
+		var groupId int
 
 		if groupBy == "numTypes" {
-			group = int(res.numTypes)
+			groupId = int(res.numTypes)
 		} else if groupBy == "numNonTypes" {
-			group = int(res.setSize + res.numLeftOut - res.numTypes)
+			groupId = int(res.setSize + res.numLeftOut - res.numTypes)
 		} else if groupBy == "setSize" {
-			group = int(res.setSize)
+			groupId = int(res.setSize)
 		} else if groupBy == "numLeftOut" {
-			group = int(res.numLeftOut)
+			groupId = int(res.numLeftOut)
 		} else {
 			panic("No suitable groupBy has been selected.")
 		}
 
-		if _, ok := indexPresenceCheck[group]; ok {
-			//no new index
-		} else {
-			//new index
-			indexPresenceCheck[group] = struct{}{}
-			indexList = append(indexList, group)
+		if !groupExists[groupId] {
+			groupExists[groupId] = true
+			groupIds = append(groupIds, groupId)
 		}
 
-		groupedMap[average] = append(groupedMap[average], res)
-		groupedMap[group] = append(groupedMap[group], res)
+		resultsByGroup[allResults] = append(resultsByGroup[allResults], res)
+		resultsByGroup[groupId] = append(resultsByGroup[groupId], res)
 	}
 
 	// compute statistics
-	sort.Ints(indexList)
+	sort.Ints(groupIds)
 
-	for _, index := range indexList {
-		groupedResults := groupedMap[index]
-		length := len(groupedResults)
-		newStat := evalSummary{}
+	for _, index := range groupIds {
+		groupedResults := resultsByGroup[index]
+		resCount := len(groupedResults)
 
-		totalDuration := int64(0)
-		totalRank := uint32(0)
-		totalRankIfHit := uint32(0)
-		allHitCount := uint32(0)
-		totalNumTP := uint32(0)
-		totalNumFP := uint32(0)
-		totalNumFN := uint32(0)
-		totalInTop1 := uint32(0)
-		totalInTop5 := uint32(0)
-		totalInTop10 := uint32(0)
-		totalInTopL := uint32(0)
-		totalNumTPAtL := uint32(0)
+		var Duration int64
+		var HitCount, NumTP, NumFP, NumFN, InTop1, InTop5, InTop10, InTopL uint32
+		var Rank, RankIfHit uint64
+		var Precision, PrecisionAtL, Recall float64 // RecallAtL==PrecisionAtL
+
+		sort.Slice( // sort results by rank in order to be able to compute the median
+			groupedResults,
+			func(i, j int) bool { return groupedResults[i].rank < groupedResults[j].rank },
+		)
 
 		for _, result := range groupedResults {
 			if result.rank < 1 {
 				fmt.Printf("rank below 1")
 			}
 			if result.rank == 1 {
-				totalInTop1++
+				InTop1++
 			}
 			if result.rank <= 5 {
-				totalInTop5++
+				InTop5++
 			}
 			if result.rank <= 10 {
-				totalInTop10++
+				InTop10++
 			}
 			if result.rank <= uint32(result.numLeftOut) {
-				totalInTopL++
-			}
-			if result.numFN == 0 {
-				totalRankIfHit += result.rank
-				allHitCount++
+				InTopL++
 			}
 
-			totalDuration += result.duration
-			totalNumTP += result.numTP
-			totalNumFN += result.numFN
-			totalNumFP += result.numFP
-			totalRank += result.rank
-			totalNumTPAtL += result.numTPAtL
+			Duration += result.duration
+			NumTP += result.numTP
+			NumFN += result.numFN
+			NumFP += result.numFP
+			Recall += float64(result.numTP) / float64(result.numLeftOut)
+			Precision += float64(result.numTP) / float64(result.numTP+result.numFP)
+			PrecisionAtL += float64(result.numTPAtL) / float64(result.numLeftOut)
+			Rank += uint64(result.rank)
+			if result.rank < 500 {
+				RankIfHit += uint64(result.rank)
+				HitCount++
+			}
 		}
 
 		var mean, median, variance float64
 
-		if length == 1 {
+		if resCount == 1 {
 			mean = float64(groupedResults[0].rank)
 			median = mean
 			variance = 0
 		} else {
-			if length%2 != 0 {
-				median = float64(groupedResults[length/2].rank)
+			if resCount%2 != 0 {
+				median = float64(groupedResults[resCount/2].rank)
 			} else {
-				median = (float64(groupedResults[length/2-1].rank) + float64(groupedResults[length/2].rank)) / 2.0
+				median = (float64(groupedResults[resCount/2-1].rank) + float64(groupedResults[resCount/2].rank)) / 2.0
 			}
-			mean = float64(totalRank) / float64(length)
+			mean = float64(Rank) / float64(resCount)
 
 			for _, result := range groupedResults {
-				error := float64(result.rank) - mean
-				variance += error * error / float64(length)
+				err := float64(result.rank) - mean
+				variance += err * err / float64(resCount)
 			}
 		}
 
-		newStat.duration = float64(totalDuration) / float64(length)
-		newStat.recall = float64(totalNumTP) / float64(totalNumTP+totalNumFN)
-		if totalNumTP+totalNumFP != 0 {
-			newStat.precision = float64(totalNumTP) / float64(totalNumTP+totalNumFP)
-		} else {
-			newStat.precision = 1
+		newStat := evalSummary{
+			groupBy:      int16(index),
+			rankAvg:      mean,
+			rankIfHitAvg: 500, // set to max by default
+			duration:     float64(Duration) / float64(resCount),
+			recall:       Recall / float64(resCount),
+			precision:    Precision / float64(resCount),
+			precisionAtL: PrecisionAtL / float64(resCount), // == recallAtL
+			topL:         float64(InTopL) / float64(resCount),
+			top1:         float64(InTop1) / float64(resCount),
+			top5:         float64(InTop5) / float64(resCount),
+			top10:        float64(InTop10) / float64(resCount),
+			median:       median,
+			variance:     variance,
+			subjects:     int64(resCount),
 		}
-		newStat.precisionAtL = float64(totalNumTPAtL) / float64(totalNumTP+totalNumFN)
-		newStat.top1 = float64(totalInTop1) / float64(length)
-		newStat.top5 = float64(totalInTop5) / float64(length)
-		newStat.top10 = float64(totalInTop10) / float64(length)
-		newStat.topL = float64(totalInTopL) / float64(length)
-		newStat.rankAvg = mean
-		if allHitCount != 0 {
-			newStat.rankIfHitAvg = float64(totalRankIfHit) / float64(allHitCount)
-		} else {
-			newStat.rankIfHitAvg = 0
+		if HitCount != 0 {
+			newStat.rankIfHitAvg = float64(RankIfHit) / float64(HitCount)
 		}
-		newStat.groupBy = int16(index)
-		newStat.variance = variance
-		newStat.median = median
-		newStat.subjects = int64(length)
+
 		statistics = append(statistics, newStat)
 	}
 	return

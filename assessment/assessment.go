@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"recommender/schematree"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -13,11 +14,11 @@ import (
 var netClient = &http.Client{
 	Transport: &http.Transport{
 		MaxIdleConns:       10,
-		MaxConnsPerHost:    5,
-		IdleConnTimeout:    30 * time.Second,
+		MaxConnsPerHost:    3,
+		IdleConnTimeout:    5 * time.Second,
 		DisableCompression: true,
 	},
-	Timeout: time.Second * 120,
+	Timeout: time.Second * 120, // how long to maximally wait for a recommendation
 }
 
 // Instance - An assessment on properties
@@ -84,24 +85,37 @@ func (inst *Instance) CalcRecommendations() schematree.PropertyRecommendations {
 func (inst *Instance) GetWikiRecs(Properties []string) schematree.PropertyRecommendations {
 	// url := "https://www.wikidata.org/w/api.php?action=wbsgetsuggestions&limit=10&format=json&properties=" + strings.Join(Properties, "|")
 	url := "http://localhost:8181/w/api.php?action=wbsgetsuggestions&format=json&properties=" + strings.Join(Properties, "|")
-	res, err := netClient.Get(url)
-	if err != nil {
-		panic(err)
+
+	var res *http.Response
+	var err error
+	for true { // retry like a maniac
+		res, err = netClient.Get(url)
+		if err != nil {
+			panic(err)
+		}
+		if res.StatusCode != 200 {
+			b, _ := ioutil.ReadAll(res.Body)
+			fmt.Println(fmt.Sprint(url, string(b)))
+			time.Sleep(time.Second)
+			continue
+		}
+		break
 	}
-	if res.StatusCode != 200 {
-		b, _ := ioutil.ReadAll(res.Body)
-		panic(fmt.Sprint(url, string(b)))
-	}
+
 	var recs struct {
 		Search []struct {
-			ID string `json:"id"`
-			// Rating float64 `json:"rating"`
+			ID     string `json:"id"`
+			Rating string `json:"rating"`
 		} `json:"search"`
 	}
 	err = json.NewDecoder(res.Body).Decode(&recs)
 	if err != nil {
 		panic(fmt.Sprintf("received malformatted response from wikidata recommender for property set %v. Error: %v", Properties, err))
 	}
+
+	// close connection to enable http connection reuse
+	res.Body.Close()
+
 	// type RankedPropertyCandidate struct {
 	// 	Property    *IItem
 	// 	Probability float64
@@ -113,9 +127,10 @@ func (inst *Instance) GetWikiRecs(Properties []string) schematree.PropertyRecomm
 		// 	item, ok = inst.tree.PropMap["http://www.wikidata.org/prop/"+r.ID]
 		// }
 		if ok {
+			prob, _ := strconv.ParseFloat(r.Rating, 64)
 			ranked = append(ranked, schematree.RankedPropertyCandidate{
 				Property:    item,
-				Probability: 0, //r.Rating,
+				Probability: prob,
 			})
 		}
 	}
