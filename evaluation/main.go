@@ -101,10 +101,6 @@ func main() {
 		writeStatisticsToFile("BatchTestResults", "Config File", datasetStatistics)
 		fmt.Printf(" Complete.\n")
 	} else {
-		if *wikiEvaluation {
-			*typedEntities = true
-		}
-
 		if *testFile == "" {
 			log.Fatalln("A test set must be provided!")
 		}
@@ -158,7 +154,11 @@ func main() {
 			} else {
 				// if no workflow config given then run standard recommender
 				if *wikiEvaluation {
-					wf = strategy.MakePresetWorkflow("wikidata-type-property", tree)
+					if *typedEntities {
+						wf = strategy.MakePresetWorkflow("wikidata-type-property", tree)
+					} else {
+						wf = strategy.MakePresetWorkflow("wikidata-property", tree)
+					}
 				} else {
 					wf = strategy.MakePresetWorkflow("direct", tree)
 				}
