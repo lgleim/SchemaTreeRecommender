@@ -30,8 +30,10 @@ func main() {
 	typedEntities := flag.Bool("typed", false, "Use type information or not")
 	handlerType := flag.String("handler", "takeOneButType", "Choose the handler: takeOneButType, takeAllButBest, takeMoreButCommon")
 	groupBy := flag.String("groupBy", "setSize", "Choose groupBy: setSize, numTypes, numLeftOut, numNonTypes")
-	writeResults := flag.Bool("results", false, "Turn on to write an additional CSV file with all evaluation results")
+	writeResults := flag.Bool("results", false, "Turn on to write an additional JSON file with all evaluation results")
+	loadResults := flag.Bool("loadResults", false, "Turn on to read results back from JSON file instead of running the actual evaluation")
 	customName := flag.String("name", "", "Add a custom designation to the generate CSV files")
+	wikiEvaluation := flag.Bool("wikiEvaluation", false, "Special Evaluation mode to evaluate the wikidata PropertySuggester")
 
 	// parse commandline arguments/flags
 	flag.Parse()
@@ -99,42 +101,9 @@ func main() {
 		writeStatisticsToFile("BatchTestResults", "Config File", datasetStatistics)
 		fmt.Printf(" Complete.\n")
 	} else {
-
 		if *testFile == "" {
 			log.Fatalln("A test set must be provided!")
 		}
-
-		// evaluation
-		if *trainedModel == "" {
-			log.Fatalln("A model must be provided!")
-		}
-		tree, err := schematree.Load(*trainedModel)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		var wf *strategy.Workflow
-		if *configPath != "" {
-			//load workflow config if given
-			config, err := configuration.ReadConfigFile(configPath)
-			if err != nil {
-				log.Fatalln(err)
-			}
-			err = config.Test()
-			if err != nil {
-				log.Fatalln(err)
-			}
-			wf, err = configuration.ConfigToWorkflow(config, tree)
-			if err != nil {
-				log.Fatalln(err)
-			}
-		} else {
-			// if no workflow config given then run standard recommender
-			wf = strategy.MakePresetWorkflow("direct", tree)
-		}
-
-		fmt.Println("Evaluating the dataset...")
-		datasetResults := evaluateDataset(tree, wf, *typedEntities, *testFile, *handlerType)
 
 		// Calculate the base name of the input file to generate CSVs with similar names.
 		// If customName is defined then will use that and, if not, it will use other flags.
@@ -153,9 +122,55 @@ func main() {
 			testBase += "-" + *handlerType + "-" + *groupBy
 		}
 
+		var datasetResults []evalResult
+		if *loadResults {
+			datasetResults = loadResultsFromFile(testBase + "-results")
+			fmt.Println(datasetResults)
+		} else {
+			// evaluation
+			if *trainedModel == "" {
+				log.Fatalln("A model must be provided!")
+			}
+			tree, err := schematree.Load(*trainedModel)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			var wf *strategy.Workflow
+			if *configPath != "" {
+				//load workflow config if given
+				config, err := configuration.ReadConfigFile(configPath)
+				if err != nil {
+					log.Fatalln(err)
+				}
+				err = config.Test()
+				if err != nil {
+					log.Fatalln(err)
+				}
+				wf, err = configuration.ConfigToWorkflow(config, tree)
+				if err != nil {
+					log.Fatalln(err)
+				}
+			} else {
+				// if no workflow config given then run standard recommender
+				if *wikiEvaluation {
+					if *typedEntities {
+						wf = strategy.MakePresetWorkflow("wikidata-type-property", tree)
+					} else {
+						wf = strategy.MakePresetWorkflow("wikidata-property", tree)
+					}
+				} else {
+					wf = strategy.MakePresetWorkflow("direct", tree)
+				}
+			}
+
+			fmt.Println("Evaluating the dataset...")
+			datasetResults = evaluateDataset(tree, wf, *typedEntities, *testFile, *handlerType)
+		}
+
 		// When results flag is given, will also write a CSV for evalResult array
 		if *writeResults {
-			fmt.Printf("Writing results to CSV file...")
+			fmt.Printf("Writing results to JSON file...")
 			writeResultsToFile(testBase+"-results", datasetResults)
 			fmt.Printf(" Complete.\n")
 		}

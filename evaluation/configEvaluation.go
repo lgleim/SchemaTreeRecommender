@@ -38,7 +38,7 @@ func runConfig(name *string, tree *schematree.SchemaTree, typed bool, handler st
 		return
 	}
 	results := evaluateDataset(tree, wf, typed, config.Testset, handler)
-	statistic = makeStatistics(results, "setSize")[0]
+	statistic = makeStatistics(results, "numNonTypes")[0]
 	statistic.groupBy = run
 	return
 }

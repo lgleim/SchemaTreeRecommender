@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	gzip "github.com/klauspost/pgzip"
@@ -62,6 +63,7 @@ func SplitBySampling(fileName string, oneInN int64) error {
 	var isPrefix, skip bool
 	var line, token []byte
 	var lastSubj string
+	var bytesProcessed int
 
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
 		// skip overlong lines
@@ -76,7 +78,7 @@ func SplitBySampling(fileName string, oneInN int64) error {
 		}
 
 		// extract subject
-		_, token = firstWord(line)
+		bytesProcessed, token = firstWord(line)
 
 		if len(token) == 0 || token[0] == '#' { // line is a comment
 			continue
@@ -86,6 +88,17 @@ func SplitBySampling(fileName string, oneInN int64) error {
 			wRing = (wRing + 1) % testModulo
 			lastSubj = string(token) // allocate string (on heap)
 		}
+
+		////// Wikidata specific processing ///// >>>>>
+		// process predicate
+		_, token = firstWord(line[bytesProcessed:])
+
+		// c.f. https://www.mediawiki.org/wiki/Wikibase/Indexing/RDF_Dump_Format#Prefixes_used
+		if strings.HasPrefix(string(token), "http://www.wikidata.org/prop/") &&
+			!strings.HasPrefix(string(token), "http://www.wikidata.org/prop/direct/") {
+			continue
+		}
+		////// Wikidata specific processing ///// <<<<<<
 
 		if wRing == 0 {
 			_, err = wTest.Write(line)

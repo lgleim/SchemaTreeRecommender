@@ -23,7 +23,7 @@ func (p *IItem) increment() {
 	atomic.AddUint64(&p.TotalCount, 1)
 }
 
-var typePrefix = "t#"
+const typePrefix = "t#"
 
 func (p *IItem) IsType() bool {
 	return strings.HasPrefix(*p.Str, typePrefix)

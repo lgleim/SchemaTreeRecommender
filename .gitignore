@@ -20,6 +20,10 @@
 !10M.nt.gz
 !test.nt.gz
 
+# Include results for publication
+!evaluation/results/*
+!evaluation/BatchTestResults-*
+
 config_*.json
 # Things built by the recommender should not be included in the repository
 10M.nt.gz.schemaTree.bin

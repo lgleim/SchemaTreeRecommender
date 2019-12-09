@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	rio "recommender/io"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
@@ -25,7 +26,7 @@ import (
 	gzip "github.com/klauspost/pgzip"
 
 	"github.com/biogo/hts/bgzf"
-	"gopkg.in/cheggaaa/pb.v1"
+	pb "gopkg.in/cheggaaa/pb.v1"
 )
 
 // All type annotations (types) and properties (properties) for a fixed subject
@@ -126,7 +127,14 @@ func SubjectSummaryReader(
 		line = line[bytesProcessed:]
 		bytesProcessed, token = firstWord(line)
 
+		// c.f. https://www.mediawiki.org/wiki/Wikibase/Indexing/RDF_Dump_Format#Prefixes_used
+		if strings.HasPrefix(string(token), "http://www.wikidata.org/prop/") &&
+			!strings.HasPrefix(string(token), "http://www.wikidata.org/prop/direct/") {
+			continue
+		}
+
 		predicate := pMap.get(string(token))
+
 		summary.Properties[predicate]++
 
 		// Count the number of predicates found for that subject. Unfortunately

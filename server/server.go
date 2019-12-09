@@ -174,11 +174,49 @@ func setupLeanRecommender(tree *schematree.SchemaTree, workflow *strategy.Workfl
 	}
 }
 
+// setupSupportComputation will setup a handler that returns the percentage of all training sets that contained the given property combination.
+func setupSupportComputation(tree *schematree.SchemaTree) func(http.ResponseWriter, *http.Request) {
+
+	// Fetch the map of all properties in the SchemaTree
+	pMap := tree.PropMap
+
+	return func(res http.ResponseWriter, req *http.Request) {
+
+		// Decode the JSON input and build a list of input strings
+		var properties []string
+		err := json.NewDecoder(req.Body).Decode(&properties)
+		if err != nil {
+			res.Write([]byte("Malformed Request. Expected an array of property IRIs"))
+			return
+		}
+		fmt.Println(properties)
+
+		t1 := time.Now()
+
+		// Match the input strings to build a list of input properties.
+		list := []*schematree.IItem{}
+		for _, pString := range properties {
+			p, ok := pMap[pString]
+			if ok {
+				list = append(list, p)
+			}
+		}
+		support := tree.Support(list)
+		total := tree.Root.Support
+
+		fmt.Println(support, "out of", total, "in", time.Since(t1))
+
+		fraction := float64(support) / float64(total)
+		json.NewEncoder(res).Encode(fraction)
+	}
+}
+
 // SetupEndpoints configures a router with all necessary endpoints and their corresponding handlers.
 func SetupEndpoints(model *schematree.SchemaTree, glossary *glossary.Glossary, workflow *strategy.Workflow, hardLimit int) http.Handler {
 	router := http.NewServeMux()
 	router.HandleFunc("/lean-recommender", setupLeanRecommender(model, workflow))
 	router.HandleFunc("/recommender", setupMappedRecommender(model, glossary, workflow, hardLimit))
+	router.HandleFunc("/support", setupSupportComputation(model))
 	// router.HandleFunc("/wikiRecommender", wikiRecommender)
 	return router
 }
