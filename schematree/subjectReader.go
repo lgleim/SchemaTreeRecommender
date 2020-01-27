@@ -89,7 +89,11 @@ func SubjectSummaryReader(
 	scanner := bufio.NewReaderSize(reader, 4*1024*1024) // 4MB line Buffer
 	var summary *SubjectSummary
 	//summary := &SubjectSummary{Properties: make(map[*IItem]uint32)}
-	typeProps := []*IItem{pMap.get("http://www.wikidata.org/prop/direct/P31")}
+	typeProps := []*IItem{
+		pMap.get("http://www.wikidata.org/prop/direct/P31"),
+		pMap.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#type"),
+		pMap.get("http://dbpedia.org/ontology/type"),
+	}
 
 	for line, isPrefix, err = scanner.ReadLine(); err == nil; line, isPrefix, err = scanner.ReadLine() {
 		if isPrefix {
