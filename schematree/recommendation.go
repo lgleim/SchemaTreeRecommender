@@ -39,23 +39,7 @@ func (ps PropertyRecommendations) Top10AvgProbibility() float32 {
 // Note: This method should be used in the future where assessments have no access to IItem.
 func (tree *SchemaTree) Recommend(properties []string, types []string) PropertyRecommendations {
 
-	list := []*IItem{}
-	// Find IItems of property strings
-	for _, pString := range properties {
-		p, ok := tree.PropMap[pString]
-		if ok {
-			list = append(list, p)
-		}
-	}
-
-	// Find IItems of type strings
-	for _, tString := range types {
-		tString := "t#" + tString
-		p, ok := tree.PropMap[tString]
-		if ok {
-			list = append(list, p)
-		}
-	}
+	list := tree.BuildPropertyList(properties, types)
 
 	// Run the SchemaTree recommender
 	var candidates PropertyRecommendations
@@ -125,6 +109,69 @@ func (tree *SchemaTree) RecommendProperty(properties IList) (ranked PropertyReco
 						if cur.ID.IsProp() {
 							candidates[cur.ID] += leaf.Support
 						}
+					}
+				}
+				// walk down
+				makeCandidates(leaf)
+			}
+		}
+
+		// now that all candidates have been collected, rank them
+		i := 0
+		setSup := float64(setSupport)
+		ranked = make([]RankedPropertyCandidate, len(candidates), len(candidates))
+		for candidate, support := range candidates {
+			ranked[i] = RankedPropertyCandidate{candidate, float64(support) / setSup}
+			i++
+		}
+
+		// sort descending by support
+		sort.Slice(ranked, func(i, j int) bool { return ranked[i].Probability > ranked[j].Probability })
+	} else {
+		// TODO: Race condition on propMap: fatal error: concurrent map iteration and map write
+		// fmt.Println(tree.Root.Support)
+		setSup := float64(tree.Root.Support) // empty set occured in all transactions
+		ranked = make([]RankedPropertyCandidate, len(tree.PropMap), len(tree.PropMap))
+		for _, prop := range tree.PropMap {
+			ranked[int(prop.SortOrder)] = RankedPropertyCandidate{prop, float64(prop.TotalCount) / setSup}
+		}
+	}
+
+	return
+}
+
+// RecommendPropertiesAndTypes recommends a ranked list of property and type candidates by given IItems
+func (tree *SchemaTree) RecommendPropertiesAndTypes(properties IList) (ranked PropertyRecommendations) {
+
+	if len(properties) > 0 {
+
+		properties.Sort() // descending by support
+
+		pSet := properties.toSet()
+
+		candidates := make(map[*IItem]uint32)
+
+		var makeCandidates func(startNode *SchemaNode)
+		makeCandidates = func(startNode *SchemaNode) { // head hunter function ;)
+			for _, child := range startNode.Children {
+				candidates[child.ID] += child.Support
+				makeCandidates(child)
+			}
+		}
+
+		// the least frequent property from the list is farthest from the root
+		rarestProperty := properties[len(properties)-1]
+
+		var setSupport uint64
+		// walk from each "leaf" instance of that property towards the root...
+		for leaf := rarestProperty.traversalPointer; leaf != nil; leaf = leaf.nextSameID { // iterate all instances for that property
+			if leaf.prefixContains(properties) {
+				setSupport += uint64(leaf.Support) // number of occuences of this set of properties in the current branch
+
+				// walk up
+				for cur := leaf; cur.parent != nil; cur = cur.parent {
+					if !(pSet[cur.ID]) {
+						candidates[cur.ID] += leaf.Support
 					}
 				}
 				// walk down

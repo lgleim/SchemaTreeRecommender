@@ -211,12 +211,55 @@ func setupSupportComputation(tree *schematree.SchemaTree) func(http.ResponseWrit
 	}
 }
 
+// hacked together for gregors thesis
+// recommends both missing properties and missing types
+func setupPropTypeRec(
+	model *schematree.SchemaTree,
+) func(http.ResponseWriter, *http.Request) {
+	return func(res http.ResponseWriter, req *http.Request) {
+
+		// Decode the JSON input and build a list of input strings
+		var input = RecommenderRequest{}
+		err := json.NewDecoder(req.Body).Decode(&input)
+		if err != nil {
+			res.Write([]byte("Malformed Request.")) // TODO: Json-Schema helps
+			return
+		}
+		fmt.Println(input) // debug: output the request
+
+		// TODO: Probably some more input sanitization is required.
+
+		// Make a recommendation based on the assessed input and chosen strategy.
+		properties := model.BuildPropertyList(input.Properties, input.Types)
+		t1 := time.Now()
+		labRecs := model.RecommendPropertiesAndTypes(properties)
+		fmt.Println(time.Since(t1))
+
+		// Prepare the recommendation list. The structure of the output is flatter than the labeled recommendations.
+		outputRecs := make([]RecommendationOutputEntry, len(labRecs), len(labRecs))
+		for i, rec := range labRecs {
+			// if rec.Property.IsType() {
+			outputRecs[i].PropertyStr = rec.Property.Str
+			outputRecs[i].Probability = rec.Probability
+		}
+
+		// Pack everything into the response
+		recResp := RecommenderResponse{Recommendations: outputRecs}
+
+		// Write the recommendations as a JSON array.
+		res.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(res).Encode(recResp)
+	}
+
+}
+
 // SetupEndpoints configures a router with all necessary endpoints and their corresponding handlers.
 func SetupEndpoints(model *schematree.SchemaTree, glossary *glossary.Glossary, workflow *strategy.Workflow, hardLimit int) http.Handler {
 	router := http.NewServeMux()
 	router.HandleFunc("/lean-recommender", setupLeanRecommender(model, workflow))
 	router.HandleFunc("/recommender", setupMappedRecommender(model, glossary, workflow, hardLimit))
 	router.HandleFunc("/support", setupSupportComputation(model))
+	router.HandleFunc("/propType", setupPropTypeRec(model))
 	// router.HandleFunc("/wikiRecommender", wikiRecommender)
 	return router
 }
