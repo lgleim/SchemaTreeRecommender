@@ -37,5 +37,5 @@ unit_test:
     dependencies:
         - build
     script:
-        - go test $(go list ./... | grep -v /vendor/) -v -coverprofile=coverage.out
+        - go test -race ./... -v -coverprofile=coverage.out
         - go tool cover -func=coverage.out
