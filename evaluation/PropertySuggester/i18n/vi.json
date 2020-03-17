@@ -1,0 +1,8 @@
+{
+	"@metadata": {
+		"authors": [
+			"Minh Nguyen"
+		]
+	},
+	"propertysuggester-desc": "Gợi ý thuộc tính khi thêm tuyên bố vào thực thể Wikibase."
+}

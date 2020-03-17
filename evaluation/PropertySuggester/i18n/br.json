@@ -1,0 +1,10 @@
+{
+	"@metadata": {
+		"authors": [
+			"Fulup"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-language": "Yezh an disoc'h.",
+	"apihelp-wbsgetsuggestions-param-limit": "Niver brasañ a zisoc'hoù.",
+	"apihelp-wbsgetsuggestions-param-search": "Klask an destenn-mañ."
+}

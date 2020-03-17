@@ -1,0 +1,24 @@
+{
+	"@metadata": {
+		"authors": [
+			"ديفيد"
+		]
+	},
+	"propertysuggester-desc": "يقترح خصائص عند إضافة عبارات قاعدة الويكي.",
+	"apihelp-wbsgetsuggestions-description": "وحدة API للحصول على اقتراحات لخصائص إضافية لإضافتها إلى كيان  قاعدة الويكي، تم تصميم وحدة API في الأساس للاستخدام من قِبل أداة مقترحة عند قيام المستخدمين بتحرير كيانات قاعدة الويكي.",
+	"apihelp-wbsgetsuggestions-summary": "وحدة API للحصول على اقتراحات لخصائص إضافية لإضافتها إلى كيان  قاعدة الويكي، تم تصميم وحدة API في الأساس للاستخدام من قِبل أداة مقترحة عند قيام المستخدمين بتحرير كيانات قاعدة الويكي.",
+	"apihelp-wbsgetsuggestions-example-1": "الحصول على اقتراحات للكيان Q4",
+	"apihelp-wbsgetsuggestions-example-2": "احصل على اقتراحات للكيان Q4 من الرتبة 10 إلى 15",
+	"apihelp-wbsgetsuggestions-example-3": "الحصول على اقتراحات لمزيج الخاصيتين P21 وP31",
+	"apihelp-wbsgetsuggestions-example-4": "الحصول على اقتراحات التصفيات التي يتم استخدامها مع P21",
+	"apihelp-wbsgetsuggestions-example-5": "الحصول على اقتراحات للمراجع المستخدمة مع P21",
+	"apihelp-wbsgetsuggestions-param-context": "إما عنصر أو مرجع أو تصفية.",
+	"apihelp-wbsgetsuggestions-param-continue": "الإزاحة لأين لمواصلة البحث.",
+	"apihelp-wbsgetsuggestions-param-entity": "اقتراح خصائص للكيان المعطى، استنادا إلى قائمة الخصائص الموجودة لدى الكيان.",
+	"apihelp-wbsgetsuggestions-param-include": "أي الاقتراحات سيتم تضمينها: بشكل افتراضي، سيتم اقتراح الخصائص التي قد تتم إضافتها فقط (التي لم يتم إهمالها، ولم تظهر بعد).",
+	"apihelp-wbsgetsuggestions-param-language": "اللغة للنتيجة.",
+	"apihelp-wbsgetsuggestions-param-limit": "أقصى عدد للنتائج.",
+	"apihelp-wbsgetsuggestions-param-properties": "اقتراح خصائص إضافية لقائمة معينة من الخصائص.",
+	"apihelp-wbsgetsuggestions-param-search": "ابحث عن هذا النص.",
+	"apihelp-wbsgetsuggestions-param-size": "حدد عدد الاقتراحات المراد إرجاعها."
+}

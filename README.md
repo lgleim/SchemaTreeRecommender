@@ -42,27 +42,6 @@ curl -d '{"lang":"en","properties":["local://prop/Color"],"types":[]}' http://lo
 
 ```
 
-## Example (old case)
-
-```
-# Build the treebuilder
-cd treebuilder
-go build .
-cd ..
-
-# Construct the schematree
-./treebuilder/treebuilder -file 10M.nt.gz
-
-# Serve recommender REST API for that file on port 8080
-./treebuilder/treebuilder -load 10M.nt.gz.schemaTree.bin -api -port 8080
-
-# Make a request to the recommender
-curl -d '["http://www.wikidata.org/prop/direct/P31","http://www.wikidata.org/prop/direct/P21","http://www.wikidata.org/prop/direct/P27"]' http://localhost:8080/recommender
-
-# Make the same request to the "special" wikiRecommender endpoint
-curl -d '["P31","P21","P27"]' http://localhost:8080/wikiRecommender
-```
-
 ### Note
 
 If you want to run on the full wikidata dataset, grab the latest dump from https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz

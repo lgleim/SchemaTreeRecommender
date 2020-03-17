@@ -1,0 +1,10 @@
+{
+	"@metadata": {
+		"authors": [
+			"Saederup92"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-language": "Sprog for resultatet.",
+	"apihelp-wbsgetsuggestions-param-limit": "Højeste antal resultater.",
+	"apihelp-wbsgetsuggestions-param-search": "Søg efter denne tekst."
+}

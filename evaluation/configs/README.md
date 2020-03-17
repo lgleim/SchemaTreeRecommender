@@ -5,7 +5,8 @@ There are two type of config files:
 - The Workflow Config for testing: Specifies the parameter for the workflow inside the Recommender.
 
 ### Structure of the Creater Config:
-`{
+```json 
+{
     "Conds": ["tooFewRecommendations","aboveThreshold","tooUnlikelyRecommendationsCondition"],
     "Merger": ["max","avg"],
     "Splitter": ["everySecondItem", "twoSupportRanges"], 
@@ -13,7 +14,8 @@ There are two type of config files:
     "MaxThreshold": 3, 
     "MaxParallel": 4, 
     "MaxFloat": 0 
-}`
+}
+```
 
 `Conds`: Condition we want to include in the test config files
 
@@ -31,7 +33,8 @@ There are two type of config files:
 
 
 ### Structure of the Workflow Config File for Evaluation:
-`{
+```json
+{
     "Testset":"../testdata/10M.nt_1in2_test.gz"
     "Layers":[ 
     {
@@ -54,7 +57,8 @@ There are two type of config files:
             "ParallelExecutions":0
         }
     ]
-}`
+}
+```
 
 `Layers`: Layers for the workflow. First element of the list is executed first inside the workflow. Each layer specifies condition for enablement, the backoff strategy, and condition and backoff specific parameter:
 

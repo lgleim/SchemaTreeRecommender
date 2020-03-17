@@ -1,0 +1,11 @@
+{
+	"@metadata": {
+		"authors": [
+			"Eitvys200"
+		]
+	},
+	"apihelp-wbsgetsuggestions-example-1": "Gauti pasiūlymų objektui Q4",
+	"apihelp-wbsgetsuggestions-param-language": "Rezultato kalba.",
+	"apihelp-wbsgetsuggestions-param-limit": "Maksimalus rezultatų skaičius.",
+	"apihelp-wbsgetsuggestions-param-search": "Ieškoti šio teksto."
+}

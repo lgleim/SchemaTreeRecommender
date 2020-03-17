@@ -1,0 +1,23 @@
+{
+	"@metadata": {
+		"authors": [
+			"Xuacu"
+		]
+	},
+	"propertysuggester-desc": "Suxere propiedaes al añadir declaraciones de Wikibase.",
+	"apihelp-wbsgetsuggestions-description": "Módulu API pa recibir suxerencies de más propiedaes p'amestar a una entidá de Wikibase. El módulu API ta destináu principalmente pa usar pol widget de suxerencies cuando los usuarios tán editando entidaes de Wikibase.",
+	"apihelp-wbsgetsuggestions-summary": "Módulu API pa recibir suxerencies de más propiedaes p'amestar a una entidá de Wikibase. El módulu API ta destináu principalmente pa usar pol widget de suxerencies cuando los usuarios tán editando entidaes de Wikibase.",
+	"apihelp-wbsgetsuggestions-example-1": "Recibir suxerencies pa la entidá Q4",
+	"apihelp-wbsgetsuggestions-example-2": "Recibir suxerencies pa la entidá Q4 nel intervalu 10 a 15",
+	"apihelp-wbsgetsuggestions-example-3": "Recibir suxerencies pa la combinación de propiedaes P21 y P31",
+	"apihelp-wbsgetsuggestions-example-4": "Recibir suxerencies pa los calificadores emplegaos con P21",
+	"apihelp-wbsgetsuggestions-example-5": "Recibir suxerencies pa les referencies que s'utilicen con P21",
+	"apihelp-wbsgetsuggestions-param-context": "O bien l'elementu, o la referencia o'l calificador.",
+	"apihelp-wbsgetsuggestions-param-continue": "Allancia dende onde siguir una busca.",
+	"apihelp-wbsgetsuggestions-param-entity": "Suxerir propiedaes para la entidá dada, basáu na llista esistiente de propiedaes que tien la entidá.",
+	"apihelp-wbsgetsuggestions-param-language": "Idioma de la resultancia.",
+	"apihelp-wbsgetsuggestions-param-limit": "Númberu máximu de resultaos.",
+	"apihelp-wbsgetsuggestions-param-properties": "Suxerir otres propiedaes pa la llista de propiedaes dada.",
+	"apihelp-wbsgetsuggestions-param-search": "Buscar esti testu.",
+	"apihelp-wbsgetsuggestions-param-size": "Especificar el númberu de suxerencies que tienen de devolvese."
+}

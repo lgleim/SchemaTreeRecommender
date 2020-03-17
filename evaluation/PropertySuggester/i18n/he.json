@@ -1,0 +1,25 @@
+{
+	"@metadata": {
+		"authors": [
+			"Amire80",
+			"Guycn2"
+		]
+	},
+	"propertysuggester-desc": "הצעת מאפיינים בהוספת קביעות של Wikibase.",
+	"apihelp-wbsgetsuggestions-description": "מודול API לקבלת הצעות למאפיינים נוספים שניתן להוסיף לישות של Wikibase. מודול ה־API הזה מתאים בעיקר לשימוש על־ידי יישומון ההצעות כשמשתמשים מוסיפים ישויות של Wikibase.",
+	"apihelp-wbsgetsuggestions-summary": "מודול API לקבלת הצעות למאפיינים נוספים שניתן להוסיף לישות של Wikibase. מודול ה־API הזה מתאים בעיקר לשימוש על־ידי יישומון ההצעות כשמשתמשים מוסיפים ישויות של Wikibase.",
+	"apihelp-wbsgetsuggestions-example-1": "קבלת הצעות עבור הישות Q4",
+	"apihelp-wbsgetsuggestions-example-2": "קבלת הצעות עבור הישות Q4 בדרגות 10 עד 15",
+	"apihelp-wbsgetsuggestions-example-3": "קבלת הצעות עבור השילוב של המאפיינים P21 ו־P31",
+	"apihelp-wbsgetsuggestions-example-4": "קבלת הצעות עבור בדיקות הכשירות שמשמשות עם המאפיין P21",
+	"apihelp-wbsgetsuggestions-example-5": "קבלת הצעות עבור ההפניות שמשמשות עם המאפיין P21",
+	"apihelp-wbsgetsuggestions-param-context": "פריט, הפניה או בדיקת כשירות.",
+	"apihelp-wbsgetsuggestions-param-continue": "היסט להמשך חיפוש.",
+	"apihelp-wbsgetsuggestions-param-entity": "הצעת מאפיינים עבור ישות נתונה, בהתבסס על רשימה קיימת של המאפיינים שיש לישות.",
+	"apihelp-wbsgetsuggestions-param-include": "אילו הצעות לכלול: ברירת המחדל היא לכלול רק מאפיינים שיכולים להתווסף (לא מיושנים, ועדיין לא נוכחים) יוצעו.",
+	"apihelp-wbsgetsuggestions-param-language": "השפה של התוצאה.",
+	"apihelp-wbsgetsuggestions-param-limit": "מספר התוצאות המרבי.",
+	"apihelp-wbsgetsuggestions-param-properties": "לציין מאפיינים נוספים עבור רשימת המאפיינים הנתונה.",
+	"apihelp-wbsgetsuggestions-param-search": "לחפש את הטקסט הזה.",
+	"apihelp-wbsgetsuggestions-param-size": "ציון מספר ההצעות שתוחזרנה."
+}

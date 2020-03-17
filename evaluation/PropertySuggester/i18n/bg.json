@@ -1,0 +1,9 @@
+{
+	"@metadata": {
+		"authors": [
+			"StanProg"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-language": "Език за резултата.",
+	"apihelp-wbsgetsuggestions-param-limit": "Максимален брой резултати."
+}

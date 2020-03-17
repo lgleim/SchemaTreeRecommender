@@ -1,0 +1,9 @@
+{
+	"@metadata": {
+		"authors": [
+			"Srdjan m"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-context": "Stavka, referenca ili kvalifikator.",
+	"apihelp-wbsgetsuggestions-param-language": "Jezik rezultata."
+}

@@ -1,0 +1,26 @@
+{
+	"@metadata": {
+		"authors": [
+			"Eduardo Addad de Oliveira",
+			"Trigonometria87",
+			"TheEduGobi"
+		]
+	},
+	"propertysuggester-desc": "Sugere propriedades ao adicionar instruções do Wikibase.",
+	"apihelp-wbsgetsuggestions-description": "Módulo API para obter sugestões de propriedades adicionais para adicionar a uma entidade Wikibase. O módulo API está principalmente destinado a uso do widget de sugestões quando usuários estão editando entidades Wikibase.",
+	"apihelp-wbsgetsuggestions-summary": "Módulo da API para obter sugestões de propriedades suplementares a adicionar a uma entidade Wikibase. O módulo da API destina-se a ser usado principalmente pelo widget de sugestões quando os utilizadores estão a editar entidades Wikibase.",
+	"apihelp-wbsgetsuggestions-example-1": "Obter sugestões para a entidade Q4",
+	"apihelp-wbsgetsuggestions-example-2": "Obter sugestões para a entidade Q4 do intervalo 10 ao 15",
+	"apihelp-wbsgetsuggestions-example-3": "Obter sugestões para a combinação das propriedades P21 e P31",
+	"apihelp-wbsgetsuggestions-example-4": "Obter sugestões para os qualificadores que são usados com P21",
+	"apihelp-wbsgetsuggestions-example-5": "Obter sugestões para as referências que são usadas com P21",
+	"apihelp-wbsgetsuggestions-param-context": "Qualquer item, referência ou qualificador.",
+	"apihelp-wbsgetsuggestions-param-continue": "Deslocamento de onde continuar uma pesquisa.",
+	"apihelp-wbsgetsuggestions-param-entity": "Sugerir propriedades para a entidade dada, baseado na lista existente de propriedades que a entidade tem.",
+	"apihelp-wbsgetsuggestions-param-include": "Quais sugestões incluir: Por padrão, apenas as propriedades que podem ser adicionadas (não-reprovadas, ainda não presentes) serão sugeridas.",
+	"apihelp-wbsgetsuggestions-param-language": "Idioma do resultado.",
+	"apihelp-wbsgetsuggestions-param-limit": "Número máximo de resultados.",
+	"apihelp-wbsgetsuggestions-param-properties": "Sugira propriedades adicionais para a determinada lista de propriedades.",
+	"apihelp-wbsgetsuggestions-param-search": "Pesquisar este texto.",
+	"apihelp-wbsgetsuggestions-param-size": "Especificar o número de sugestões a serem retornadas."
+}

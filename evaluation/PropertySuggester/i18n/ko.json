@@ -1,0 +1,10 @@
+{
+	"@metadata": {
+		"authors": [
+			"Ykhwong"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-language": "결과를 위한 언어입니다.",
+	"apihelp-wbsgetsuggestions-param-limit": "최대 결과 수입니다.",
+	"apihelp-wbsgetsuggestions-param-search": "이 텍스트를 찾습니다."
+}

@@ -1,0 +1,11 @@
+{
+	"@metadata": {
+		"authors": [
+			"Jagwar"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-language": "Fiteny ho an'ny valiny.",
+	"apihelp-wbsgetsuggestions-param-limit": "Isa farafahabetsaky ny valiny.",
+	"apihelp-wbsgetsuggestions-param-search": "Hitady ity soratra ity",
+	"apihelp-wbsgetsuggestions-param-size": "Hilaza isan-torohevitra ho averina."
+}

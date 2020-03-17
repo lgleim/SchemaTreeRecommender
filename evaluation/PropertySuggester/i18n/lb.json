@@ -1,0 +1,10 @@
+{
+	"@metadata": {
+		"authors": [
+			"Robby"
+		]
+	},
+	"apihelp-wbsgetsuggestions-param-language": "Sprooch fir d'Resultat.",
+	"apihelp-wbsgetsuggestions-param-limit": "Maximal Zuel vu Resultater.",
+	"apihelp-wbsgetsuggestions-param-search": "No dësem Text sichen."
+}
