@@ -1,5 +1,10 @@
 # SchemaTree Recommender
 
+[![Build Status](https://git.rwth-aachen.de/kglab2019/recommender/badges/master/pipeline.svg)](https://git.rwth-aachen.de/kglab2019/recommender/commits/master)
+[![GitHub issues](https://img.shields.io/github/issues/lgleim/SchemaTreeRecommender)](https://github.com/lgleim/SchemaTreeRecommender/issues)
+[![Test Coverage](https://git.rwth-aachen.de/kglab2019/recommender/badges/master/coverage.svg)](https://git.rwth-aachen.de/kglab2019/recommender/commits/master)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0) 
+
 Individual descriptions in subfolders.
 
 ## Installation
