@@ -7,6 +7,47 @@
 
 Individual descriptions in subfolders.
 
+### Publication
+
+Further documentation and an evaluation of this project can be found in our [ESWC 2020](https://2020.eswc-conferences.org/) publication: https://doi.org/10.1007/978-3-030-49461-2_11
+
+Cite as:
+
+```
+Gleim L.C. et al. (2020) SchemaTree: Maximum-Likelihood Property Recommendation for Wikidata. 
+In: Harth A. et al. (eds) The Semantic Web. ESWC 2020. Lecture Notes in Computer Science, vol 12123. Springer, Cham
+```
+
+Or via BibTeX:
+
+```tex
+@InProceedings{10.1007/978-3-030-49461-2_11,
+  author="Gleim, Lars C.
+  and Schimassek, Rafael
+  and H{\"u}ser, Dominik
+  and Peters, Maximilian
+  and Kr{\"a}mer, Christoph
+  and Cochez, Michael
+  and Decker, Stefan",
+  editor="Harth, Andreas
+  and Kirrane, Sabrina
+  and Ngonga Ngomo, Axel-Cyrille
+  and Paulheim, Heiko
+  and Rula, Anisa
+  and Gentile, Anna Lisa
+  and Haase, Peter
+  and Cochez, Michael",
+  title="SchemaTree: Maximum-Likelihood Property Recommendation for Wikidata",
+  booktitle="The Semantic Web",
+  year="2020",
+  publisher="Springer International Publishing",
+  address="Cham",
+  pages="179--195",
+  abstract="Wikidata is a free and open knowledge base which can be read and edited by both humans and machines. It acts as a central storage for the structured data of several Wikimedia projects. To improve the process of manually inserting new facts, the Wikidata platform features an association rule-based tool to recommend additional suitable properties. In this work, we introduce a novel approach to provide such recommendations based on frequentist inference. We introduce a trie-based method that can efficiently learn and represent property set probabilities in RDF graphs. We extend the method by adding type information to improve recommendation precision and introduce backoff strategies which further increase the performance of the initial approach for entities with rare property combinations. We investigate how the captured structure can be employed for property recommendation, analogously to the Wikidata PropertySuggester. We evaluate our approach on the full Wikidata dataset and compare its performance to the state-of-the-art Wikidata PropertySuggester, outperforming it in all evaluated metrics. Notably we could reduce the average rank of the first relevant recommendation by 71{\%}.",
+  isbn="978-3-030-49461-2"
+}
+```
+
 ## Installation
 
 1. Install the go runtime (and VS Code + Golang tools)
@@ -51,43 +92,12 @@ curl -d '{"lang":"en","properties":["local://prop/Color"],"types":[]}' http://lo
 
 If you want to run on the full wikidata dataset, grab the latest dump from https://dumps.wikimedia.org/wikidatawiki/entities/latest-truthy.nt.gz`
 
-### Publication
+### Performance Evaluation Details
 
-Further documentation and an evaluation of this project can be found in our [ESWC 2020](https://2020.eswc-conferences.org/) publication: https://doi.org/10.1007/978-3-030-49461-2_11
+| Dataset | Results |
+| ------ | ------ |
+| Wikidata | [here](evaluation/visualization_single_evaluation_wiki.ipynb) |
+| LOD-a-lot | [here](evaluation/visualization_single_evaluation-LOD.ipynb) |
+| Backoff strategies | [here](evaluation/visualization_batch.ipynb) |
+ 
 
-Cite as:
-
-```
-Gleim L.C. et al. (2020) SchemaTree: Maximum-Likelihood Property Recommendation for Wikidata. 
-In: Harth A. et al. (eds) The Semantic Web. ESWC 2020. Lecture Notes in Computer Science, vol 12123. Springer, Cham
-```
-
-Or via BibTeX:
-
-```tex
-@InProceedings{10.1007/978-3-030-49461-2_11,
-  author="Gleim, Lars C.
-  and Schimassek, Rafael
-  and H{\"u}ser, Dominik
-  and Peters, Maximilian
-  and Kr{\"a}mer, Christoph
-  and Cochez, Michael
-  and Decker, Stefan",
-  editor="Harth, Andreas
-  and Kirrane, Sabrina
-  and Ngonga Ngomo, Axel-Cyrille
-  and Paulheim, Heiko
-  and Rula, Anisa
-  and Gentile, Anna Lisa
-  and Haase, Peter
-  and Cochez, Michael",
-  title="SchemaTree: Maximum-Likelihood Property Recommendation for Wikidata",
-  booktitle="The Semantic Web",
-  year="2020",
-  publisher="Springer International Publishing",
-  address="Cham",
-  pages="179--195",
-  abstract="Wikidata is a free and open knowledge base which can be read and edited by both humans and machines. It acts as a central storage for the structured data of several Wikimedia projects. To improve the process of manually inserting new facts, the Wikidata platform features an association rule-based tool to recommend additional suitable properties. In this work, we introduce a novel approach to provide such recommendations based on frequentist inference. We introduce a trie-based method that can efficiently learn and represent property set probabilities in RDF graphs. We extend the method by adding type information to improve recommendation precision and introduce backoff strategies which further increase the performance of the initial approach for entities with rare property combinations. We investigate how the captured structure can be employed for property recommendation, analogously to the Wikidata PropertySuggester. We evaluate our approach on the full Wikidata dataset and compare its performance to the state-of-the-art Wikidata PropertySuggester, outperforming it in all evaluated metrics. Notably we could reduce the average rank of the first relevant recommendation by 71{\%}.",
-  isbn="978-3-030-49461-2"
-}
-```
